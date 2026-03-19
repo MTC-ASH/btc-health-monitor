@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Health Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0f;
+    --bg2:       #12121a;
+    --bg3:       #1a1a26;
+    --border:    rgba(255,255,255,0.08);
+    --border2:   rgba(255,255,255,0.14);
+    --text:      #e8e6f0;
+    --text2:     #9896aa;
+    --text3:     #5a5870;
+    --mono:      'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+    --sans:      -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+
+    --red:       #ff4d4d;
+    --amber:     #f59e0b;
+    --green:     #22c55e;
+    --blue:      #3b82f6;
+    --teal:      #14b8a6;
+    --purple:    #a855f7;
+    --red-bg:    rgba(255,77,77,0.12);
+    --amber-bg:  rgba(245,158,11,0.12);
+    --green-bg:  rgba(34,197,94,0.12);
+    --blue-bg:   rgba(59,130,246,0.12);
+    --teal-bg:   rgba(20,184,166,0.12);
+    --purple-bg: rgba(168,85,247,0.12);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+
+  /* ── Header ── */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 0;
+    position: sticky;
+    top: 0;
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .header-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    display: flex;
+    gap: 20px;
+  }
+
+  /* ── Regime band ── */
+  .regime-band {
+    height: 3px;
+    width: 100%;
+    transition: background 0.6s ease;
+  }
+
+  /* ── Sections ── */
+  .section { padding: 32px 0; border-bottom: 1px solid var(--border); }
+  .section:last-child { border-bottom: none; }
+
+  /* ── Hero ── */
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+    padding: 40px 0 32px;
+  }
+
+  @media (max-width: 700px) {
+    .hero { grid-template-columns: 1fr; gap: 24px; }
+  }
+
+  .hero-left {}
+
+  .regime-label {
+    font-family: var(--mono);
+    font-size: clamp(22px, 4vw, 36px);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.1;
+    margin-bottom: 10px;
+    transition: color 0.4s;
+  }
+
+  .regime-desc {
+    font-size: 13px;
+    color: var(--text2);
+    max-width: 360px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+
+  .signal-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .badge-label { color: var(--text3); font-weight: 400; }
+
+  /* ── Gauge ── */
+  .gauge-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+
+  .gauge-scores {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .score-item { text-align: center; }
+
+  .score-num {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    display: block;
+    transition: color 0.4s;
+  }
+
+  .score-horizon {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    display: block;
+    margin-top: 4px;
+  }
+
+  .gauge-bar-wrap {
+    position: relative;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right,
+      var(--purple) 0%,
+      var(--teal) 16%,
+      var(--blue) 32%,
+      var(--green) 48%,
+      var(--amber) 64%,
+      var(--red) 80%,
+      #ff1a1a 100%
+    );
+    margin-bottom: 6px;
+  }
+
+  .gauge-needle {
+    position: absolute;
+    top: -4px;
+    width: 18px; height: 18px;
+    background: var(--text);
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    transition: left 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 8px rgba(0,0,0,0.6);
+  }
+
+  .gauge-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 0.05em;
+    margin-top: 8px;
+  }
+
+  /* ── Layer cards ── */
+  .layers {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 800px) {
+    .layers { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 400px) {
+    .layers { grid-template-columns: 1fr; }
+  }
+
+  .layer-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .layer-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .layer-name {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .layer-score {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+
+  .layer-bar {
+    height: 4px;
+    background: var(--bg3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .layer-bar-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+
+  .layer-signals { display: flex; flex-direction: column; gap: 5px; }
+
+  .layer-signal-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+  }
+
+  .layer-signal-name { color: var(--text2); }
+  .layer-signal-score { font-family: var(--mono); font-size: 11px; }
+
+  /* ── Signal table ── */
+  .signal-table-wrap { overflow-x: auto; }
+
+  .signal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .signal-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .signal-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+  }
+
+  .signal-table tr:last-child td { border-bottom: none; }
+  .signal-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .signal-name { color: var(--text); font-weight: 500; }
+  .signal-source { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+  .signal-value { font-family: var(--mono); color: var(--text2); }
+
+  .signal-bar-cell { min-width: 80px; }
+
+  .mini-bar {
+    height: 5px;
+    background: var(--bg3);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .mini-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+
+  .reading-pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* ── Chart ── */
+  .chart-container {
+    position: relative;
+    width: 100%;
+    height: 300px;
+  }
+
+  .chart-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .chart-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    transition: all 0.15s;
+  }
+
+  .chart-btn.active, .chart-btn:hover {
+    background: var(--bg3);
+    color: var(--text);
+    border-color: var(--border2);
+  }
+
+  /* ── Track record ── */
+  .track-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  @media (max-width: 600px) {
+    .track-grid { grid-template-columns: 1fr; }
+  }
+
+  .track-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+  }
+
+  .track-horizon {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .track-rate {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .track-counts {
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  .history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .history-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .history-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-family: var(--mono);
+    vertical-align: middle;
+  }
+
+  .history-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .outcome-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+  }
+
+  /* ── Section headers ── */
+  .section-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Missing signal banner ── */
+  .missing-banner {
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--amber);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Loading / Empty states ── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 13px;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--text2);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text3);
+    font-size: 13px;
+  }
+
+  .empty-state p { margin-top: 8px; font-size: 12px; }
+
+  /* ── Footer ── */
+  .footer {
+    padding: 24px 0;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    border-top: 1px solid var(--border);
+    line-height: 1.8;
+  }
+
+  /* ── Utilities ── */
+  .mono { font-family: var(--mono); }
+  .text2 { color: var(--text2); }
+  .text3 { color: var(--text3); }
+  .mt8 { margin-top: 8px; }
+  .mt16 { margin-top: 16px; }
+  .mt24 { margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<!-- CONFIG — edit these two values -->
+<script>
+  const SUPABASE_URL = 'https://amrxduglanxsrdkvkbvd.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
+</script>
+
+<header class="header">
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-dot" id="liveDot"></div>
+        BTC_HEALTH_MONITOR
+      </div>
+      <div class="header-meta">
+        <span id="lastUpdated">—</span>
+        <span id="btcPriceHeader">BTC —</span>
+      </div>
+    </div>
+  </div>
+  <div class="regime-band" id="regimeBand"></div>
+</header>
+
+<main>
+  <div class="container">
+
+    <!-- HERO -->
+    <section class="section" style="border-bottom: none;">
+      <div id="heroLoading" class="loading"><div class="spinner"></div> loading snapshot...</div>
+      <div id="heroContent" style="display:none;">
+        <div class="hero">
+          <div class="hero-left">
+            <div class="regime-label" id="regimeLabel">—</div>
+            <div class="regime-desc" id="regimeDesc">—</div>
+            <div class="signal-badges" id="signalBadges"></div>
+          </div>
+          <div class="gauge-wrap">
+            <div class="gauge-scores" id="gaugeScores"></div>
+            <div class="gauge-bar-wrap">
+              <div class="gauge-needle" id="gaugeNeedle" style="left: 50%;"></div>
+            </div>
+            <div class="gauge-labels">
+              <span>CAPITULATION</span>
+              <span>OVERSOLD</span>
+              <span>NEUTRAL</span>
+              <span>OVERHEATED</span>
+              <span>EUPHORIA</span>
+            </div>
+          </div>
+        </div>
+        <div id="missingBanner" style="display:none;" class="missing-banner">
+          ⚠ Some signals were unavailable this week: <span id="missingList"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- LAYER SCORES -->
+    <section class="section">
+      <div class="section-title">Signal Layers</div>
+      <div class="layers" id="layerCards"></div>
+    </section>
+
+    <!-- SIGNAL BREAKDOWN -->
+    <section class="section">
+      <div class="section-title">Signal Breakdown</div>
+      <div class="signal-table-wrap">
+        <table class="signal-table" id="signalTable">
+          <thead>
+            <tr>
+              <th>Signal</th>
+              <th>Source</th>
+              <th>Value</th>
+              <th>Score</th>
+              <th style="min-width:80px;"></th>
+              <th>Reading</th>
+            </tr>
+          </thead>
+          <tbody id="signalTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- HISTORICAL CHART -->
+    <section class="section">
+      <div class="section-title">Historical Chart</div>
+      <div class="chart-controls" id="chartControls">
+        <button class="chart-btn" data-horizon="7d">7-day score</button>
+        <button class="chart-btn active" data-horizon="14d">14-day score</button>
+        <button class="chart-btn" data-horizon="30d">30-day score</button>
+        <button class="chart-btn" data-horizon="price">BTC price</button>
+      </div>
+      <div class="chart-container">
+        <canvas id="historyChart"></canvas>
+      </div>
+    </section>
+
+    <!-- PREDICTION TRACK RECORD -->
+    <section class="section">
+      <div class="section-title">Prediction Track Record</div>
+      <div id="trackLoading" class="loading"><div class="spinner"></div> loading...</div>
+      <div id="trackContent" style="display:none;">
+        <div class="track-grid" id="trackCards"></div>
+        <div class="section-title mt24">Recent Predictions</div>
+        <div style="overflow-x:auto;">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>BTC Price</th>
+                <th>Score 7d</th>
+                <th>Signal</th>
+                <th>7d Result</th>
+                <th>14d Result</th>
+                <th>30d Result</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="trackEmpty" class="empty-state" style="display:none;">
+        <strong>Building track record...</strong>
+        <p>Predictions will appear here after the first weekly snapshot.</p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    BTC Health Monitor · Data: Newhedge + Binance · Updates every Monday 9am ET<br>
+    Not financial advice. For informational purposes only.
+  </div>
+</footer>
+
+<script>
+// ============================================================
+// CONFIG & HELPERS
+// ============================================================
+const REGIMES = {
+  "Euphoria / Top Risk":    { color: '#ff4d4d', bg: 'rgba(255,77,77,0.12)',    label: '↓ STRONG DOWNSIDE BIAS' },
+  "Overheated":             { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',   label: '↓ DOWNSIDE LEAN' },
+  "Healthy Bull":           { color: '#22c55e', bg: 'rgba(34,197,94,0.12)',    label: '↑ UPSIDE LEAN' },
+  "Neutral / Ranging":      { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',   label: '→ NO CLEAR EDGE' },
+  "Oversold / Opportunity": { color: '#14b8a6', bg: 'rgba(20,184,166,0.12)',   label: '↑ UPSIDE LEAN' },
+  "Capitulation":           { color: '#a855f7', bg: 'rgba(168,85,247,0.12)',   label: '↑ STRONG UPSIDE BIAS' },
+  "Unknown":                { color: '#5a5870', bg: 'rgba(90,88,112,0.12)',    label: '— UNKNOWN' },
+};
+
+const REGIME_DESCS = {
+  "Euphoria / Top Risk":    "Extreme overextension across all signals. High probability of correction. Historically precedes sharp drawdowns.",
+  "Overheated":             "Market running hot. Leverage elevated, holders in significant profit. Elevated short-term downside risk.",
+  "Healthy Bull":           "Conditions constructive. Trend intact, moderate leverage. Upside bias but not overextended.",
+  "Neutral / Ranging":      "Mixed signals. No strong directional edge at this time horizon. Market digesting.",
+  "Oversold / Opportunity": "Fear elevated. Short-term holders in pain. Leverage washing out. Historically favours accumulation.",
+  "Capitulation":           "Extreme fear. Maximum pain. Historically marks generational buying opportunities — but can persist.",
+  "Unknown":                "Insufficient data to classify regime.",
+};
+
+const SIGNAL_META = {
+  mvrv_z:       { name: 'MVRV Z-Score',         source: 'Newhedge', fmt: v => v?.toFixed(2) ?? '—' },
+  nupl:         { name: 'NUPL',                  source: 'Newhedge', fmt: v => v?.toFixed(3) ?? '—' },
+  sth_sopr:     { name: 'STH SOPR',              source: 'Newhedge', fmt: v => v?.toFixed(3) ?? '—' },
+  lth_supply:   { name: 'LTH Supply (4w Δ)',     source: 'Newhedge', fmt: v => v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '—' },
+  puell:        { name: 'Puell Multiple',         source: 'Newhedge', fmt: v => v?.toFixed(2) ?? '—' },
+  funding_rate: { name: 'Funding Rate (7d avg)',  source: 'Binance',  fmt: v => v != null ? (v * 100).toFixed(4) + '%' : '—' },
+  oi_change:    { name: 'Open Interest (7d Δ)',   source: 'Binance',  fmt: v => v != null ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : '—' },
+  long_short:   { name: 'Long/Short Ratio',       source: 'Binance',  fmt: v => v?.toFixed(2) ?? '—' },
+  rsi:          { name: 'RSI 14d',                source: 'Newhedge', fmt: v => v?.toFixed(1) ?? '—' },
+};
+
+const LAYER_META = {
+  valuation:   { name: 'VALUATION',   signals: ['mvrv_z', 'nupl'],                          color: '#a855f7' },
+  holder:      { name: 'HOLDER BHV',  signals: ['sth_sopr', 'lth_supply'],                  color: '#14b8a6' },
+  mining:      { name: 'MINING',      signals: ['puell'],                                    color: '#f59e0b' },
+  derivatives: { name: 'DERIVATIVES', signals: ['funding_rate', 'oi_change', 'long_short'],  color: '#3b82f6' },
+};
+
+function scoreColor(s) {
+  if (s === null || s === undefined) return '#5a5870';
+  if (s >= 80) return '#ff4d4d';
+  if (s >= 65) return '#f59e0b';
+  if (s >= 50) return '#22c55e';
+  if (s >= 36) return '#3b82f6';
+  if (s >= 20) return '#14b8a6';
+  return '#a855f7';
+}
+
+function readingLabel(s) {
+  if (s === null || s === undefined) return { text: 'N/A', color: '#5a5870', bg: 'rgba(90,88,112,0.15)' };
+  if (s >= 80) return { text: 'EXTREME HIGH', color: '#ff4d4d', bg: 'rgba(255,77,77,0.12)' };
+  if (s >= 65) return { text: 'ELEVATED',     color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' };
+  if (s >= 55) return { text: 'WARM',         color: '#84cc16', bg: 'rgba(132,204,22,0.12)' };
+  if (s >= 45) return { text: 'NEUTRAL',      color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' };
+  if (s >= 35) return { text: 'COOL',         color: '#14b8a6', bg: 'rgba(20,184,166,0.12)' };
+  if (s >= 20) return { text: 'DEPRESSED',    color: '#14b8a6', bg: 'rgba(20,184,166,0.15)' };
+  return { text: 'EXTREME LOW', color: '#a855f7', bg: 'rgba(168,85,247,0.12)' };
+}
+
+function fmtPrice(p) {
+  if (!p) return '—';
+  return '$' + parseFloat(p).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ============================================================
+// SUPABASE FETCH
+// ============================================================
+async function sbFetch(path) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    }
+  });
+  if (!res.ok) throw new Error(`Supabase: ${res.status}`);
+  return res.json();
+}
+
+// ============================================================
+// RENDER HERO
+// ============================================================
+function renderHero(snap) {
+  const regime = REGIMES[snap.regime_14d] || REGIMES['Unknown'];
+  const desc = REGIME_DESCS[snap.regime_14d] || '';
+
+  // Regime band
+  document.getElementById('regimeBand').style.background = regime.color;
+
+  // Logo dot color
+  document.getElementById('liveDot').style.background = regime.color;
+  document.getElementById('liveDot').style.boxShadow = `0 0 8px ${regime.color}`;
+
+  // Header meta
+  document.getElementById('lastUpdated').textContent = `Updated ${fmtDate(snap.snapshot_date)}`;
+  document.getElementById('btcPriceHeader').textContent = `BTC ${fmtPrice(snap.btc_price)}`;
+
+  // Regime label
+  const regimeEl = document.getElementById('regimeLabel');
+  regimeEl.textContent = snap.regime_14d || '—';
+  regimeEl.style.color = regime.color;
+  document.getElementById('regimeDesc').textContent = desc;
+
+  // Badges
+  const badges = document.getElementById('signalBadges');
+  const horizons = [
+    { label: '7D', signal: snap.signal_7d, score: snap.composite_7d, regime: snap.regime_7d },
+    { label: '14D', signal: snap.signal_14d, score: snap.composite_14d, regime: snap.regime_14d },
+    { label: '30D', signal: snap.signal_30d, score: snap.composite_30d, regime: snap.regime_30d },
+  ];
+  badges.innerHTML = horizons.map(h => {
+    const c = scoreColor(h.score);
+    const arrow = h.signal === 'UP' ? '↑' : h.signal === 'DOWN' ? '↓' : '→';
+    return `<div class="badge" style="color:${c};border-color:${c}30;background:${c}12;">
+      <span class="badge-label">${h.label}</span> ${arrow} ${h.signal}
+    </div>`;
+  }).join('');
+
+  // Gauge scores
+  document.getElementById('gaugeScores').innerHTML = horizons.map(h => {
+    const c = scoreColor(h.score);
+    return `<div class="score-item">
+      <span class="score-num" style="color:${c}">${h.score ?? '—'}</span>
+      <span class="score-horizon">${h.label} SCORE</span>
+    </div>`;
+  }).join('');
+
+  // Gauge needle — use 14d composite as primary
+  const needle = document.getElementById('gaugeNeedle');
+  const pct = snap.composite_14d != null ? Math.max(2, Math.min(98, snap.composite_14d)) : 50;
+  needle.style.left = pct + '%';
+
+  // Missing signals
+  if (snap.signals_missing && snap.signals_missing.length > 0) {
+    document.getElementById('missingBanner').style.display = 'flex';
+    document.getElementById('missingList').textContent = snap.signals_missing.join(', ');
+  }
+
+  document.getElementById('heroLoading').style.display = 'none';
+  document.getElementById('heroContent').style.display = 'block';
+}
+
+// ============================================================
+// RENDER LAYER CARDS
+// ============================================================
+function renderLayers(snap) {
+  const container = document.getElementById('layerCards');
+  const scoreKeys = { valuation: snap.score_valuation, holder: snap.score_holder, mining: snap.score_mining, derivatives: snap.score_derivatives };
+
+  container.innerHTML = Object.entries(LAYER_META).map(([key, meta]) => {
+    const score = scoreKeys[key];
+    const c = scoreColor(score);
+    const signals = meta.signals.map(sk => {
+      const sm = SIGNAL_META[sk];
+      const rawKey = sk === 'lth_supply' ? 'lth_supply_4w_change' : sk === 'funding_rate' ? 'funding_rate_7d_avg' : sk === 'oi_change' ? 'oi_change_7d' : sk === 'long_short' ? 'long_short_ratio' : sk === 'puell' ? 'puell_multiple' : sk === 'rsi' ? 'rsi_14d' : sk;
+      const val = snap[rawKey];
+      const sigScore = snap[`score_${sk}`];
+      return `<div class="layer-signal-row">
+        <span class="layer-signal-name">${sm.name}</span>
+        <span class="layer-signal-score" style="color:${scoreColor(sigScore)}">${sigScore ?? '—'}</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="layer-card">
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${c};opacity:0.7;border-radius:10px 10px 0 0;"></div>
+      <div class="layer-name">${meta.name}</div>
+      <div class="layer-score" style="color:${c}">${score ?? '—'}</div>
+      <div class="layer-bar"><div class="layer-bar-fill" style="width:${score ?? 0}%;background:${c};"></div></div>
+      <div class="layer-signals">${signals}</div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// RENDER SIGNAL TABLE
+// ============================================================
+function renderSignalTable(snap) {
+  const keyMap = {
+    mvrv_z: 'mvrv_z', nupl: 'nupl', sth_sopr: 'sth_sopr',
+    lth_supply: 'lth_supply_4w_change', puell: 'puell_multiple',
+    funding_rate: 'funding_rate_7d_avg', oi_change: 'oi_change_7d',
+    long_short: 'long_short_ratio', rsi: 'rsi_14d',
+  };
+
+  const tbody = document.getElementById('signalTableBody');
+  tbody.innerHTML = Object.entries(SIGNAL_META).map(([key, meta]) => {
+    const rawVal = snap[keyMap[key]];
+    const score = snap[`score_${key}`];
+    const rl = readingLabel(score);
+    const c = scoreColor(score);
+    return `<tr>
+      <td class="signal-name">${meta.name}</td>
+      <td class="signal-source">${meta.source}</td>
+      <td class="signal-value">${meta.fmt(rawVal)}</td>
+      <td><span class="mono" style="color:${c}">${score ?? '—'}</span></td>
+      <td class="signal-bar-cell">
+        <div class="mini-bar"><div class="mini-bar-fill" style="width:${score ?? 0}%;background:${c};"></div></div>
+      </td>
+      <td><span class="reading-pill" style="color:${rl.color};background:${rl.bg};">${rl.text}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// RENDER HISTORY CHART
+// ============================================================
+let chartInstance = null;
+let allSnapshots = [];
+let activeHorizon = '14d';
+
+function renderChart(snapshots, horizon) {
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+
+  const sorted = [...snapshots].sort((a, b) => new Date(a.snapshot_date) - new Date(b.snapshot_date));
+  const labels = sorted.map(s => fmtDate(s.snapshot_date));
+
+  if (horizon === 'price') {
+    const prices = sorted.map(s => s.btc_price);
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'BTC Price (USD)',
+          data: prices,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245,158,11,0.08)',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: '#f59e0b',
+          tension: 0.3,
+          fill: true,
+        }]
+      },
+      options: chartOptions('BTC Price', v => fmtPrice(v))
+    });
+    return;
+  }
+
+  const scoreKey = `composite_${horizon}`;
+  const scores = sorted.map(s => s[scoreKey]);
+
+  // Regime band backgrounds
+  const bands = [
+    { min: 80, max: 100, color: 'rgba(255,77,77,0.08)' },
+    { min: 65, max: 80,  color: 'rgba(245,158,11,0.08)' },
+    { min: 50, max: 65,  color: 'rgba(34,197,94,0.06)' },
+    { min: 36, max: 50,  color: 'rgba(59,130,246,0.06)' },
+    { min: 20, max: 36,  color: 'rgba(20,184,166,0.08)' },
+    { min: 0,  max: 20,  color: 'rgba(168,85,247,0.08)' },
+  ];
+
+  const pointColors = scores.map(s => scoreColor(s));
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: `${horizon.toUpperCase()} Health Score`,
+        data: scores,
+        borderColor: '#e8e6f0',
+        backgroundColor: 'rgba(232,230,240,0.05)',
+        borderWidth: 2,
+        pointRadius: 5,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        tension: 0.3,
+        fill: false,
+      }]
+    },
+    options: {
+      ...chartOptions('Health Score', v => v),
+      plugins: {
+        ...chartOptions().plugins,
+        annotation: undefined,
+      },
+    }
+  });
+}
+
+function chartOptions(label, fmt) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255,255,255,0.04)' },
+        ticks: { color: '#5a5870', font: { family: "'JetBrains Mono', monospace", size: 10 }, maxRotation: 45 },
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.06)' },
+        ticks: { color: '#5a5870', font: { family: "'JetBrains Mono', monospace", size: 10 }, callback: fmt || (v => v) },
+      }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1a1a26',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        titleColor: '#e8e6f0',
+        bodyColor: '#9896aa',
+        titleFont: { family: "'JetBrains Mono', monospace", size: 11 },
+        bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
+      }
+    }
+  };
+}
+
+// ============================================================
+// RENDER TRACK RECORD
+// ============================================================
+function renderTrackRecord(outcomes) {
+  if (!outcomes || outcomes.length === 0) {
+    document.getElementById('trackLoading').style.display = 'none';
+    document.getElementById('trackEmpty').style.display = 'block';
+    return;
+  }
+
+  function stats(horizon) {
+    const resolved = outcomes.filter(o => o[`correct_${horizon}`] !== null && o[`price_${horizon}`] !== null);
+    const correct = resolved.filter(o => o[`correct_${horizon}`] === true).length;
+    const wrong = resolved.filter(o => o[`correct_${horizon}`] === false).length;
+    const rate = resolved.length > 0 ? Math.round((correct / (correct + wrong)) * 100) : null;
+    return { resolved: resolved.length, correct, wrong, rate };
+  }
+
+  const s7 = stats('7d'), s14 = stats('14d'), s30 = stats('30d');
+
+  const trackCards = document.getElementById('trackCards');
+  trackCards.innerHTML = [
+    { horizon: '7D', s: s7 }, { horizon: '14D', s: s14 }, { horizon: '30D', s: s30 }
+  ].map(({ horizon, s }) => {
+    const rateColor = s.rate === null ? '#5a5870' : s.rate >= 60 ? '#22c55e' : s.rate >= 45 ? '#f59e0b' : '#ff4d4d';
+    return `<div class="track-card">
+      <div class="track-horizon">${horizon} PREDICTION</div>
+      <div class="track-rate" style="color:${rateColor}">${s.rate !== null ? s.rate + '%' : '—'}</div>
+      <div class="track-counts">${s.correct}W / ${s.wrong}L / ${s.resolved - s.correct - s.wrong} INC</div>
+    </div>`;
+  }).join('');
+
+  const tbody = document.getElementById('historyTableBody');
+  const sorted = [...outcomes].sort((a, b) => new Date(b.snapshot_date) - new Date(a.snapshot_date)).slice(0, 20);
+
+  tbody.innerHTML = sorted.map(o => {
+    function outcomeCell(horizon) {
+      const correct = o[`correct_${horizon}`];
+      const pct = o[`pct_change_${horizon}`];
+      const price = o[`price_${horizon}`];
+      if (price === null) return `<td style="color:#5a5870">pending</td>`;
+      if (correct === null) return `<td style="color:#5a5870">${pct != null ? (pct > 0 ? '+' : '') + pct.toFixed(1) + '% INCL' : 'pending'}</td>`;
+      const color = correct ? '#22c55e' : '#ff4d4d';
+      const icon = correct ? '●' : '●';
+      const pctStr = pct != null ? (pct > 0 ? '+' : '') + pct.toFixed(1) + '%' : '';
+      return `<td><span class="outcome-dot" style="background:${color}"></span><span style="color:${color}">${correct ? 'HIT' : 'MISS'}</span> <span style="color:#5a5870">${pctStr}</span></td>`;
+    }
+
+    const signalColor = o.signal_7d === 'UP' ? '#22c55e' : o.signal_7d === 'DOWN' ? '#ff4d4d' : '#5a5870';
+    const signalArrow = o.signal_7d === 'UP' ? '↑' : o.signal_7d === 'DOWN' ? '↓' : '→';
+
+    return `<tr>
+      <td style="color:#9896aa">${fmtDate(o.snapshot_date)}</td>
+      <td>${fmtPrice(o.price_at_prediction)}</td>
+      <td style="font-family:var(--mono);color:${scoreColor(null)}">—</td>
+      <td><span style="color:${signalColor};font-family:var(--mono)">${signalArrow} ${o.signal_7d}</span></td>
+      ${outcomeCell('7d')}
+      ${outcomeCell('14d')}
+      ${outcomeCell('30d')}
+    </tr>`;
+  }).join('');
+
+  document.getElementById('trackLoading').style.display = 'none';
+  document.getElementById('trackContent').style.display = 'block';
+}
+
+// ============================================================
+// CHART CONTROLS
+// ============================================================
+document.getElementById('chartControls').addEventListener('click', e => {
+  const btn = e.target.closest('.chart-btn');
+  if (!btn) return;
+  document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeHorizon = btn.dataset.horizon;
+  if (allSnapshots.length > 0) renderChart(allSnapshots, activeHorizon);
+});
+
+// ============================================================
+// MAIN — LOAD DATA
+// ============================================================
+async function init() {
+  try {
+    // Load latest snapshot
+    const snapshots = await sbFetch('snapshots?order=snapshot_date.desc&limit=52');
+
+    if (!snapshots || snapshots.length === 0) {
+      document.getElementById('heroLoading').innerHTML = '<div class="empty-state"><strong>No snapshots yet</strong><p>The first snapshot will appear after the Worker runs on Monday.</p></div>';
+      document.getElementById('trackLoading').style.display = 'none';
+      document.getElementById('trackEmpty').style.display = 'block';
+      return;
+    }
+
+    const latest = snapshots[0];
+    allSnapshots = snapshots;
+
+    renderHero(latest);
+    renderLayers(latest);
+    renderSignalTable(latest);
+    renderChart(snapshots, activeHorizon);
+
+    // Load prediction outcomes
+    const outcomes = await sbFetch('prediction_outcomes?order=snapshot_date.desc&limit=30');
+    renderTrackRecord(outcomes);
+
+  } catch (err) {
+    console.error('Init error:', err);
+    document.getElementById('heroLoading').innerHTML = `<div class="empty-state"><strong>Error loading data</strong><p>${err.message}</p></div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
