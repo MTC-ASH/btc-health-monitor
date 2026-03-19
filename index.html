@@ -769,7 +769,7 @@ const SUPABASE_KEY = 'sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
 
 // ── State ─────────────────────────────────────────────────────
 let snapshot = null;
-let history  = [];
+let snapHistory = [];
 let horizon  = '7d';
 let historyChart = null;
 let currentChartField = 'composite_7d';
@@ -793,7 +793,7 @@ async function loadData() {
     ]);
     if (snaps && snaps.length) {
       snapshot = snaps[0];
-      history  = hist || [];
+      snapHistory = hist || [];
       render();
     }
   } catch(e) {
@@ -1126,8 +1126,8 @@ function renderChartField(field) {
   const ctx = document.getElementById('historyChart').getContext('2d');
   if (historyChart) historyChart.destroy();
 
-  const labels = history.map(h => h.snapshot_date);
-  const data   = history.map(h => h[field]);
+  const labels = snapHistory.map(h => h.snapshot_date);
+  const data = snapHistory.map(h => h[field]);
 
   let color, label;
   if (field==='btc_price') { color='#7b8cff'; label='BTC Price'; }
