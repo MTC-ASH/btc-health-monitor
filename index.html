@@ -404,13 +404,14 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13p
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div class="panel-label" style="margin-bottom:0">Historical</div>
         <div class="chart-btns3">
-          <button class="cb3 on" onclick="swC('fair_value_gap_pct',this)">FV Gap</button>
-          <button class="cb3" onclick="swC('btc_price',this)">Price</button>
-          <button class="cb3" onclick="swC('composite_7d',this)">7D</button>
-          <button class="cb3" onclick="swC('composite_30d',this)">30D</button>
+          <button class="cb3 on" onclick="swC('btc_price',this)">BTC Price</button>
+          <button class="cb3" onclick="swC('composite_7d',this)">7D Score</button>
+          <button class="cb3" onclick="swC('composite_30d',this)">30D Score</button>
+          <button class="cb3" onclick="swC('fair_value_gap_pct',this)">FV Gap</button>
         </div>
       </div>
       <div class="chart-area3"><canvas id="hChart"></canvas></div>
+      <div id="chartRange" style="font-family:var(--mono);font-size:9px;color:var(--ink4);margin-top:4px;text-align:right"></div>
     </div>
 
   </div><!-- /main -->
@@ -419,7 +420,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13p
 <script>
 const SB='https://amrxduglanxsrdkvkbvd.supabase.co';
 const SK='sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
-let snap=null,hist=[],hChart=null,cField='fair_value_gap_pct';
+let snap=null,hist=[],hChart=null,cField='btc_price';
 
 async function sb(t,q=''){
   const r=await fetch(`${SB}/rest/v1/${t}?${q}`,{headers:{apikey:SK,Authorization:`Bearer ${SK}`}});
@@ -430,12 +431,38 @@ async function sb(t,q=''){
 async function load(){
   const btn=document.getElementById('btnR');btn.classList.add('spin');
   try{
-    const [s,h]=await Promise.all([
+    // Fetch latest live snapshot + both history sources in parallel
+    const [s, backtest, liveHist]=await Promise.all([
       sb('snapshots','order=created_at.desc&limit=1'),
-      sb('snapshots','order=snapshot_date.asc&limit=80&select=snapshot_date,fair_value,fair_value_gap_pct,btc_price,composite_7d,composite_30d,realised_price,dma_200')
+      sb('backtest_snapshots','order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,fair_value_gap_pct:score_valuation'),
+      sb('snapshots','order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,fair_value,fair_value_gap_pct,realised_price,dma_200')
     ]);
-    if(s&&s.length){snap=s[0];hist=h||[];render();}
-  }catch(e){console.error(e);}
+
+    if(s&&s.length){
+      snap=s[0];
+
+      // Merge backtest + live history, deduplicate by date, live takes priority
+      const liveMap={};
+      (liveHist||[]).forEach(r=>{liveMap[r.snapshot_date]=r;});
+
+      // Build combined history: backtest rows enriched with live data where available
+      const combined=(backtest||[]).map(b=>{
+        const live=liveMap[b.snapshot_date];
+        return live?{...b,...live}:b;
+      });
+
+      // Add any live rows not in backtest (recent weeks)
+      (liveHist||[]).forEach(r=>{
+        if(!combined.find(c=>c.snapshot_date===r.snapshot_date)){
+          combined.push(r);
+        }
+      });
+
+      combined.sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
+      hist=combined;
+      render();
+    }
+  }catch(e){console.error('Load error:',e);}
   btn.classList.remove('spin');
 }
 
@@ -689,31 +716,36 @@ function fmtPct2(v,d=1){
 function drawChart(){
   const ctx=document.getElementById('hChart').getContext('2d');
   if(hChart) hChart.destroy();
-  const lbl=hist.map(h=>h.snapshot_date);
-  const data=hist.map(h=>h[cField]);
-  const cm={fair_value_gap_pct:'#1a4a2e',btc_price:'#1a3a5a',composite_7d:'#1a4a2e',composite_30d:'#5a3a0a'};
-  const lm={fair_value_gap_pct:'FV Gap %',btc_price:'BTC Price',composite_7d:'7D Score',composite_30d:'30D Score'};
-  const c=cm[cField]||'#1a4a2e';
-  hChart=new Chart(ctx,{
-    type:'line',
-    data:{labels:lbl,datasets:[{data,borderColor:c,borderWidth:1.5,pointRadius:0,pointHoverRadius:3,tension:0.4,fill:true,
-      backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,160);g.addColorStop(0,c+'20');g.addColorStop(1,c+'00');return g;}}]},
-    options:{responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:false},
-        tooltip:{backgroundColor:'#18160f',borderColor:'rgba(0,0,0,0)',borderWidth:0,
-          titleFont:{family:"'JetBrains Mono'",size:10},bodyFont:{family:"'JetBrains Mono'",size:11},
-          callbacks:{label:x=>{const v=x.raw;
-            if(cField==='btc_price') return ' $'+Number(v).toLocaleString();
-            if(cField==='fair_value_gap_pct') return ' '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';
-            return ' '+v;}}}},
-      scales:{
-        x:{grid:{display:false},border:{display:false},ticks:{color:'#b8b0a0',maxTicksLimit:6,font:{family:"'JetBrains Mono'",size:9}}},
+  const vHist=hist.filter(h=>h[cField]!==null&&h[cField]!==undefined);
+  if(!vHist.length) return;
+  const lbl=vHist.map(h=>{const d=new Date(h.snapshot_date);return d.toLocaleDateString('en-US',{month:'short',year:'2-digit'});});
+  const data=vHist.map(h=>h[cField]);
+  const cm={fair_value_gap_pct:'#236638',btc_price:'#1a3a5a',composite_7d:'#236638',composite_30d:'#5a3a0a'};
+  const c=cm[cField]||'#1a3a5a';
+  const datasets=[{data,borderColor:c,borderWidth:1.5,pointRadius:0,pointHoverRadius:4,tension:0.3,fill:true,
+    backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,160);g.addColorStop(0,c+'22');g.addColorStop(1,c+'00');return g;}}];
+  if(cField==='btc_price'){
+    const fvData=vHist.map(h=>h.fair_value||null);
+    if(fvData.some(v=>v!==null)) datasets.push({data:fvData,borderColor:'rgba(0,0,0,0.25)',borderWidth:1,borderDash:[4,3],pointRadius:0,tension:0.3,fill:false});
+  }
+  hChart=new Chart(ctx,{type:'line',data:{labels:lbl,datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#18160f',borderColor:'rgba(0,0,0,0)',borderWidth:0,
+        titleFont:{family:"'JetBrains Mono'",size:10},bodyFont:{family:"'JetBrains Mono'",size:11},
+        callbacks:{title:items=>vHist[items[0].dataIndex]?.snapshot_date||items[0].label,
+          label:x=>{const v=x.raw;if(v===null||v===undefined)return null;
+            if(x.datasetIndex===1) return ' Fair value: $'+Number(v).toLocaleString();
+            if(cField==='btc_price') return ' BTC: $'+Number(v).toLocaleString();
+            if(cField==='fair_value_gap_pct') return ' Gap: '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';
+            return ' Score: '+v;}}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:{color:'#b8b0a0',maxTicksLimit:8,font:{family:"'JetBrains Mono'",size:9},maxRotation:0}},
         y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},
           ticks:{color:'#b8b0a0',font:{family:"'JetBrains Mono'",size:9},
-            callback:v=>cField==='btc_price'?'$'+Number(v).toLocaleString():cField==='fair_value_gap_pct'?(v>=0?'+':'')+v+'%':v},
-          ...(cField==='composite_7d'||cField==='composite_30d'?{min:0,max:100}:{})}}}
-  });
+            callback:v=>{if(cField==='btc_price') return '$'+Number(v/1000).toFixed(0)+'k';
+              if(cField==='fair_value_gap_pct') return (v>=0?'+':'')+v+'%'; return v;}},
+          ...(cField==='composite_7d'||cField==='composite_30d'?{min:0,max:100}:{})}}}});
+  const el=document.getElementById('chartRange');
+  if(el) el.textContent=vHist.length+' weeks · '+vHist[0].snapshot_date+' → '+vHist[vHist.length-1].snapshot_date;
 }
 
 function swC(f,btn){
