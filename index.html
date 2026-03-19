@@ -413,11 +413,20 @@ const TODAY=new Date().toISOString().split('T')[0];
 
 // ── Fetch helpers ──────────────────────────────────────────────
 async function sbGet(table, query){
-  const r = await fetch(`${SB}/rest/v1/${table}?${query}`, {
-    headers:{apikey:SK, Authorization:`Bearer ${SK}`}
-  });
-  if(!r.ok) throw new Error(`${table}: HTTP ${r.status}`);
-  return r.json();
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), 12000);
+  try {
+    const r = await fetch(`${SB}/rest/v1/${table}?${query}`, {
+      headers:{apikey:SK, Authorization:`Bearer ${SK}`},
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    if(!r.ok) throw new Error(`${table}: HTTP ${r.status}`);
+    return r.json();
+  } catch(e) {
+    clearTimeout(t);
+    throw e.name==='AbortError' ? new Error(`${table}: request timed out`) : e;
+  }
 }
 
 async function load(){
@@ -430,8 +439,8 @@ async function load(){
     const [snaps, bts, bto, ls] = await Promise.all([
       sbGet('snapshots', 'order=created_at.desc&limit=1'),
       sbGet('backtest_snapshots', 'order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d'),
-      sbGet('backtest_outcomes', 'order=snapshot_date.asc&select=snapshot_date,btc_price_entry,signal_7d,signal_30d,correct_7d,correct_30d,composite_7d,pct_change_7d,pct_change_30d'),
-      sbGet('snapshots', 'order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,fair_value,fair_value_gap_pct,realised_price,dma_200'),
+      sbGet('backtest_outcomes', 'order=snapshot_date.asc&select=snapshot_date,btc_price_entry,signal_7d,signal_30d,correct_7d,correct_30d,composite_7d'),
+      sbGet('snapshots', 'order=snapshot_date.asc&limit=52&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,fair_value,fair_value_gap_pct'),
     ]);
 
     if(!snaps || !snaps.length) throw new Error('No snapshot data found');
