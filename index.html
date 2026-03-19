@@ -4,1264 +4,911 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BTC Health Monitor</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Syne+Mono&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Syne+Mono&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-
-:root {
-  --bg:#04050d;
-  --bg2:#080a16;
-  --bg3:#0d1024;
-  --card:#0a0d1f;
-  --card2:#0f1428;
-  --border:rgba(100,120,255,0.12);
-  --border2:rgba(100,120,255,0.22);
-  --text:#e2e4ff;
-  --text2:#7c82b8;
-  --text3:#3d4270;
-  --display:'Syne',sans-serif;
-  --mono:'Syne Mono',monospace;
-  --body:'DM Sans',sans-serif;
-
-  --up:#00ffaa;
-  --up2:#00cc88;
-  --up-glow:rgba(0,255,170,0.18);
-  --down:#ff3d6e;
-  --down2:#cc2255;
-  --down-glow:rgba(255,61,110,0.18);
-  --neutral:#7b8cff;
-  --neutral-glow:rgba(123,140,255,0.18);
-  --gold:#ffcc44;
-  --gold-glow:rgba(255,204,68,0.18);
-
-  --accent1:#7b8cff;
-  --accent2:#a855f7;
-  --accent3:#00ffaa;
+:root{
+  --bg:#03040c;--bg2:#070810;--card:#080b18;--card2:#0c1020;
+  --border:rgba(90,110,255,0.1);--border2:rgba(90,110,255,0.2);
+  --text:#dde0ff;--text2:#6b72a8;--text3:#333660;
+  --display:'Syne',sans-serif;--mono:'Syne Mono',monospace;--body:'DM Sans',sans-serif;
+  --up:#00f5a0;--up2:rgba(0,245,160,0.15);
+  --down:#ff3366;--down2:rgba(255,51,102,0.15);
+  --neutral:#5a6eff;--neutral2:rgba(90,110,255,0.15);
+  --gold:#ffcc33;--gold2:rgba(255,204,51,0.15);
+  --deep-under:#00f5a0;--under:#44ddaa;
+  --fair:#5a6eff;
+  --over:#ff8833;--deep-over:#ff3366;
 }
-
 html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:14px;line-height:1.6;min-height:100vh;overflow-x:hidden}
 
-body {
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--body);
-  font-size:14px;
-  line-height:1.6;
-  min-height:100vh;
-  overflow-x:hidden;
-}
+/* BG */
+.bg-wrap{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-orb{position:absolute;border-radius:50%;filter:blur(120px);opacity:0.08;animation:drift 25s ease-in-out infinite}
+.bg-orb.o1{width:700px;height:700px;background:#5a6eff;top:-300px;left:-200px;animation-delay:0s}
+.bg-orb.o2{width:500px;height:500px;background:#a040ff;bottom:-200px;right:-100px;animation-delay:-10s}
+.bg-orb.o3{width:400px;height:400px;background:#00f5a0;top:40%;left:40%;opacity:0.04;animation-delay:-20s}
+@keyframes drift{0%,100%{transform:translate(0,0)}33%{transform:translate(40px,-60px)}66%{transform:translate(-30px,40px)}}
+.bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(90,110,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(90,110,255,0.025) 1px,transparent 1px);
+  background-size:80px 80px}
 
-/* ── Animated background ── */
-.bg-canvas {
-  position:fixed;
-  inset:0;
-  z-index:0;
-  pointer-events:none;
-  overflow:hidden;
-}
+.wrap{max-width:1240px;margin:0 auto;padding:0 28px;position:relative;z-index:1}
 
-.orb {
-  position:absolute;
-  border-radius:50%;
-  filter:blur(80px);
-  opacity:0.12;
-  animation:float 20s ease-in-out infinite;
-}
-.orb1{width:600px;height:600px;background:radial-gradient(circle,#7b8cff,transparent);top:-200px;left:-200px;animation-delay:0s}
-.orb2{width:400px;height:400px;background:radial-gradient(circle,#a855f7,transparent);top:40%;right:-100px;animation-delay:-7s}
-.orb3{width:500px;height:500px;background:radial-gradient(circle,#00ffaa,transparent);bottom:-200px;left:30%;animation-delay:-14s;opacity:0.06}
+/* HEADER */
+header{padding:28px 0 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:36px}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-mark{width:38px;height:38px;background:linear-gradient(135deg,#5a6eff,#a040ff);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;position:relative}
+.logo-mark::after{content:'';position:absolute;inset:0;border-radius:10px;background:linear-gradient(135deg,transparent,rgba(255,255,255,0.15))}
+.logo-name{font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-0.3px}
+.logo-tag{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase}
+.hdr-r{display:flex;align-items:center;gap:14px}
+.live-pip{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up);animation:pip 2s ease-in-out infinite}
+@keyframes pip{0%,100%{opacity:1}50%{opacity:0.4}}
+.upd{font-family:var(--mono);font-size:11px;color:var(--text3)}
+.btn-refresh{display:flex;align-items:center;gap:7px;padding:8px 16px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all 0.2s;letter-spacing:0.5px}
+.btn-refresh:hover{border-color:var(--neutral);color:var(--neutral)}
+.btn-refresh svg{width:13px;height:13px;transition:transform 0.5s}
+.btn-refresh.spin svg{animation:rot 0.8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
 
-@keyframes float{
-  0%,100%{transform:translate(0,0) scale(1)}
-  33%{transform:translate(30px,-40px) scale(1.05)}
-  66%{transform:translate(-20px,30px) scale(0.95)}
-}
+/* LOADER */
+.loader-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px}
+.loader-ring{width:44px;height:44px;border:2px solid var(--border2);border-top-color:var(--neutral);border-radius:50%;animation:rot 0.8s linear infinite}
+.loader-text{font-family:var(--mono);font-size:12px;color:var(--text3);letter-spacing:1px}
 
-.grid-overlay {
-  position:fixed;
-  inset:0;
-  z-index:0;
-  pointer-events:none;
-  background-image:
-    linear-gradient(rgba(100,120,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(100,120,255,0.03) 1px, transparent 1px);
-  background-size:60px 60px;
-}
-
-/* ── Layout ── */
-.container{max-width:1200px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
-
-/* ── Header ── */
-header {
-  padding:32px 0 24px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  border-bottom:1px solid var(--border);
-  margin-bottom:40px;
-}
-
-.logo {
-  display:flex;
-  align-items:center;
-  gap:14px;
-}
-
-.logo-icon {
-  width:42px;height:42px;
-  border-radius:12px;
-  background:linear-gradient(135deg,var(--accent1),var(--accent2));
-  display:flex;align-items:center;justify-content:center;
-  font-size:20px;
-  position:relative;
-  overflow:hidden;
-}
-.logo-icon::after{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,0.2));
-}
-
-.logo-text{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-0.3px}
-.logo-sub{font-size:11px;color:var(--text2);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono)}
-
-.header-right{display:flex;align-items:center;gap:16px}
-
-.refresh-btn {
-  display:flex;align-items:center;gap:8px;
-  padding:9px 18px;
-  background:var(--card2);
-  border:1px solid var(--border2);
-  border-radius:10px;
-  color:var(--text2);
-  font-family:var(--mono);font-size:12px;
-  cursor:pointer;
-  transition:all 0.2s;
-  letter-spacing:0.5px;
-}
-.refresh-btn:hover{border-color:var(--accent1);color:var(--accent1);background:rgba(123,140,255,0.08)}
-.refresh-btn svg{width:14px;height:14px;transition:transform 0.6s}
-.refresh-btn.loading svg{animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-.live-dot {
-  width:8px;height:8px;
-  border-radius:50%;
-  background:var(--up);
-  box-shadow:0 0 8px var(--up);
-  animation:pulse-dot 2s ease-in-out infinite;
-}
-@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(0.8)}}
-
-.last-update{font-size:11px;color:var(--text3);font-family:var(--mono)}
-
-/* ── Loading ── */
-.loading-state{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:400px;gap:20px;
-}
-.loader{
-  width:48px;height:48px;
-  border:2px solid var(--border2);
-  border-top-color:var(--accent1);
-  border-radius:50%;
-  animation:spin 0.8s linear infinite;
-}
-.loading-text{font-family:var(--mono);font-size:13px;color:var(--text2);letter-spacing:1px}
-
-/* ── Hero section ── */
-.hero{
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  gap:16px;
-  margin-bottom:16px;
-}
-
-/* ── Price card ── */
-.price-card {
-  grid-column:1;
+/* FAIR VALUE HERO — THE CENTREPIECE */
+.fv-hero{
   background:var(--card);
   border:1px solid var(--border);
-  border-radius:20px;
-  padding:28px;
-  position:relative;
-  overflow:hidden;
-  transition:border-color 0.3s;
-}
-.price-card::before{
-  content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse at top left,rgba(123,140,255,0.06),transparent 60%);
-}
-.price-card:hover{border-color:var(--border2)}
-
-.price-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
-.price-value{font-family:var(--display);font-size:38px;font-weight:800;letter-spacing:-2px;line-height:1;margin-bottom:6px}
-.price-change{font-family:var(--mono);font-size:12px;color:var(--text2)}
-
-/* ── Signal orb ── */
-.signal-card {
-  grid-column:2;
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:20px;
-  padding:28px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  position:relative;
-  overflow:hidden;
-  cursor:default;
-}
-
-.orb-container{
-  position:relative;
-  width:110px;height:110px;
+  border-radius:24px;
+  padding:40px;
   margin-bottom:16px;
-}
-
-.signal-orb {
-  width:110px;height:110px;
-  border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--display);font-size:13px;font-weight:700;
-  letter-spacing:2px;text-transform:uppercase;
   position:relative;
+  overflow:hidden;
+}
+.fv-hero::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 60% 0%,rgba(90,110,255,0.06),transparent 60%);
+}
+.fv-hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;position:relative}
+.fv-left{}
+.fv-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:2.5px;color:var(--text3);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.fv-eyebrow::before{content:'';display:inline-block;width:20px;height:1px;background:var(--text3)}
+.fv-headline{font-family:var(--display);font-size:48px;font-weight:800;letter-spacing:-3px;line-height:1;margin-bottom:8px}
+.fv-subhead{font-family:var(--body);font-size:15px;color:var(--text2);margin-bottom:32px;font-weight:300;line-height:1.5}
+.fv-valuation{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:10px 20px;border-radius:12px;
+  font-family:var(--display);font-size:15px;font-weight:700;
+  margin-bottom:32px;
+  border:1px solid currentColor;
   transition:all 0.5s;
 }
-.signal-orb::before{
-  content:'';
-  position:absolute;inset:-8px;
-  border-radius:50%;
-  border:1px solid currentColor;
-  opacity:0.2;
-  animation:orb-ring 3s ease-in-out infinite;
-}
-.signal-orb::after{
-  content:'';
-  position:absolute;inset:-16px;
-  border-radius:50%;
-  border:1px solid currentColor;
-  opacity:0.08;
-  animation:orb-ring 3s ease-in-out infinite 0.5s;
-}
-@keyframes orb-ring{
-  0%,100%{transform:scale(1);opacity:0.15}
-  50%{transform:scale(1.08);opacity:0.08}
-}
-
-.orb-up{
-  background:radial-gradient(circle at 35% 35%,rgba(0,255,170,0.3),rgba(0,255,170,0.1));
-  border:1.5px solid rgba(0,255,170,0.5);
-  color:var(--up);
-  box-shadow:0 0 40px rgba(0,255,170,0.2),inset 0 0 30px rgba(0,255,170,0.08);
-}
-.orb-down{
-  background:radial-gradient(circle at 35% 35%,rgba(255,61,110,0.3),rgba(255,61,110,0.1));
-  border:1.5px solid rgba(255,61,110,0.5);
-  color:var(--down);
-  box-shadow:0 0 40px rgba(255,61,110,0.2),inset 0 0 30px rgba(255,61,110,0.08);
-}
-.orb-neutral{
-  background:radial-gradient(circle at 35% 35%,rgba(123,140,255,0.3),rgba(123,140,255,0.1));
-  border:1.5px solid rgba(123,140,255,0.5);
-  color:var(--neutral);
-  box-shadow:0 0 40px rgba(123,140,255,0.2),inset 0 0 30px rgba(123,140,255,0.08);
-}
-
-.signal-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
-.signal-horizon{font-family:var(--display);font-size:15px;font-weight:700}
-
-/* ── Probability card ── */
-.prob-card {
-  grid-column:3;
-  background:var(--card);
+.fv-hist{
+  background:var(--card2);
   border:1px solid var(--border);
-  border-radius:20px;
-  padding:28px;
-  position:relative;
-  overflow:hidden;
+  border-radius:14px;
+  padding:18px 20px;
+  display:flex;gap:24px;
 }
+.fv-hist-item{text-align:center;flex:1}
+.fv-hist-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:6px}
+.fv-hist-value{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-1px}
+.fv-hist-sub{font-size:11px;color:var(--text2);margin-top:2px}
 
-.prob-row{
-  display:flex;
-  flex-direction:column;
-  gap:18px;
-}
+.fv-right{display:flex;flex-direction:column;align-items:center;gap:24px}
 
-.prob-item{}
-.prob-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
+/* Gap meter */
+.gap-meter{width:100%;max-width:320px}
+.gap-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:16px;text-align:center}
+.gap-track{
+  position:relative;height:10px;border-radius:20px;
+  background:linear-gradient(to right,
+    var(--deep-under) 0%,
+    var(--under) 20%,
+    var(--fair) 40%,
+    var(--fair) 60%,
+    var(--over) 80%,
+    var(--deep-over) 100%
+  );
   margin-bottom:8px;
 }
-.prob-horizon{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase}
-.prob-pct{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-1px}
-.prob-bar-bg{height:5px;background:rgba(255,255,255,0.06);border-radius:10px;overflow:hidden}
-.prob-bar{height:100%;border-radius:10px;transition:width 1.2s cubic-bezier(0.23,1,0.32,1)}
-.prob-conf{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:5px}
-
-/* ── Score gauge ── */
-.gauge-section{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:16px;
-  margin-bottom:16px;
+.gap-needle{
+  position:absolute;top:50%;transform:translate(-50%,-50%);
+  width:4px;height:20px;background:#fff;border-radius:2px;
+  box-shadow:0 0 8px rgba(255,255,255,0.6);
+  transition:left 1.5s cubic-bezier(0.23,1,0.32,1);
 }
+.gap-labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--text3)}
+.gap-pct{text-align:center;font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:-1px;margin-bottom:4px}
+.gap-sub{text-align:center;font-size:12px;color:var(--text2)}
 
-.gauge-card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:20px;
-  padding:28px;
-  position:relative;
-  overflow:hidden;
-  transition:border-color 0.3s,transform 0.2s;
-  cursor:pointer;
-}
-.gauge-card:hover{border-color:var(--border2);transform:translateY(-2px)}
-.gauge-card::before{
-  content:'';position:absolute;inset:0;
-  opacity:0;
-  transition:opacity 0.3s;
-}
-.gauge-card:hover::before{opacity:1}
-
-.gauge-title{
-  font-family:var(--mono);font-size:10px;letter-spacing:2px;
-  color:var(--text3);text-transform:uppercase;margin-bottom:20px;
+/* Anchors */
+.anchors{width:100%;max-width:320px}
+.anchor-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:12px}
+.anchor-row{
   display:flex;justify-content:space-between;align-items:center;
+  padding:10px 0;border-bottom:1px solid var(--border);
 }
-.gauge-badge{
-  font-size:10px;padding:3px 10px;border-radius:20px;
-  font-family:var(--mono);letter-spacing:0.5px;
-}
+.anchor-row:last-child{border:none}
+.anchor-name{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.anchor-val{font-family:var(--display);font-size:15px;font-weight:700}
+.anchor-wt{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:1px}
 
-.gauge-wrap{position:relative;width:180px;height:100px;margin:0 auto 16px}
-canvas.gauge-canvas{display:block}
+/* ROW 2: PRICE + HEALTH + PROBABILITY */
+.row2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
 
-.gauge-score{
-  position:absolute;
-  bottom:0;left:50%;transform:translateX(-50%);
-  text-align:center;
-}
-.gauge-num{font-family:var(--display);font-size:36px;font-weight:800;letter-spacing:-2px;line-height:1}
-.gauge-label{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1px;margin-top:2px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:24px;position:relative;overflow:hidden;transition:border-color 0.3s}
+.card:hover{border-color:var(--border2)}
+.card-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
+.card-value{font-family:var(--display);font-size:32px;font-weight:800;letter-spacing:-1.5px;line-height:1}
+.card-sub{font-size:12px;color:var(--text2);margin-top:6px}
 
-.gauge-regime{
-  text-align:center;
-  font-family:var(--display);font-size:13px;font-weight:600;margin-bottom:16px;
-}
+/* Signal orb */
+.orb-wrap{display:flex;flex-direction:column;align-items:center}
+.signal-tabs{display:flex;gap:4px;width:100%;background:rgba(255,255,255,0.03);border-radius:8px;padding:3px;margin-bottom:16px}
+.stab{flex:1;padding:5px;border-radius:6px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--text3);transition:all 0.2s}
+.stab.on{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
+.sorb{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;position:relative;transition:all 0.5s;margin-bottom:12px}
+.sorb::before,.sorb::after{content:'';position:absolute;border-radius:50%;border:1px solid currentColor;animation:ring 3s ease-in-out infinite}
+.sorb::before{inset:-10px;opacity:0.15}
+.sorb::after{inset:-20px;opacity:0.06;animation-delay:0.4s}
+@keyframes ring{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.sorb.up{background:radial-gradient(circle at 35% 35%,rgba(0,245,160,0.25),rgba(0,245,160,0.05));border:1.5px solid rgba(0,245,160,0.4);color:var(--up);box-shadow:0 0 32px rgba(0,245,160,0.15)}
+.sorb.down{background:radial-gradient(circle at 35% 35%,rgba(255,51,102,0.25),rgba(255,51,102,0.05));border:1.5px solid rgba(255,51,102,0.4);color:var(--down);box-shadow:0 0 32px rgba(255,51,102,0.15)}
+.sorb.neutral{background:radial-gradient(circle at 35% 35%,rgba(90,110,255,0.25),rgba(90,110,255,0.05));border:1.5px solid rgba(90,110,255,0.4);color:var(--neutral);box-shadow:0 0 32px rgba(90,110,255,0.15)}
+.sorb-regime{font-family:var(--display);font-size:13px;font-weight:600;text-align:center}
 
-/* ── Horizon tabs ── */
-.tab-group{
-  display:flex;gap:6px;
-  background:rgba(255,255,255,0.03);
-  border-radius:12px;padding:4px;
-  margin-bottom:20px;
-}
-.tab{
-  flex:1;padding:7px;border-radius:8px;
-  font-family:var(--mono);font-size:11px;letter-spacing:0.5px;
-  text-align:center;cursor:pointer;
-  border:none;background:transparent;color:var(--text3);
-  transition:all 0.2s;
-}
-.tab.active{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
-.tab:not(.active):hover{color:var(--text2)}
+/* Prob bars */
+.prob-rows{display:flex;flex-direction:column;gap:16px;margin-top:4px}
+.prob-row2{} 
+.prob-hdr{display:flex;justify-content:space-between;margin-bottom:7px}
+.prob-lbl{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase}
+.prob-pct{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-0.5px}
+.prob-track{height:4px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;margin-bottom:5px}
+.prob-fill{height:100%;border-radius:10px;transition:width 1.4s cubic-bezier(0.23,1,0.32,1)}
+.prob-conf{font-family:var(--mono);font-size:10px;color:var(--text3)}
 
-/* ── Signals grid ── */
-.signals-section{margin-bottom:16px}
+/* GAUGE + LAYERS ROW */
+.row3{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
 
-.signals-header{
-  display:flex;justify-content:space-between;align-items:center;
-  margin-bottom:16px;
-}
-.section-title{
-  font-family:var(--display);font-size:16px;font-weight:700;
-  letter-spacing:-0.3px;
-}
-.section-sub{font-size:12px;color:var(--text2)}
+.gauge-title2{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
+.gauge-badge2{font-size:10px;padding:2px 10px;border-radius:20px;font-family:var(--mono)}
+.gauge-wrap2{position:relative;width:200px;height:110px;margin:16px auto 8px}
+.gauge-score2{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}
+.gauge-num2{font-family:var(--display);font-size:42px;font-weight:800;letter-spacing:-2px;line-height:1}
+.gauge-lbl2{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px}
+.gauge-regime2{text-align:center;font-family:var(--display);font-size:13px;font-weight:600;margin:10px 0 14px}
+.gauge-tabs{display:flex;gap:4px;background:rgba(255,255,255,0.03);border-radius:8px;padding:3px;margin-bottom:14px}
+.gauge-tab{flex:1;padding:5px;border-radius:6px;font-family:var(--mono);font-size:10px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--text3);transition:all 0.2s}
+.gauge-tab.on{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
+.gauge-note{text-align:center;font-family:var(--mono);font-size:10px;color:var(--text3)}
 
-.signals-grid{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:10px;
+.layers-wrap{display:flex;flex-direction:column;gap:8px;height:100%}
+.layer-row-item{
+  display:flex;align-items:center;gap:14px;
+  background:var(--card2);border:1px solid var(--border);
+  border-radius:12px;padding:12px 16px;
+  cursor:pointer;transition:all 0.2s;flex:1;
 }
+.layer-row-item:hover{border-color:var(--border2);transform:translateX(3px)}
+.layer-icon2{font-size:18px;min-width:24px}
+.layer-info{flex:1}
+.layer-name2{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase}
+.layer-bar-bg{height:3px;background:rgba(255,255,255,0.05);border-radius:10px;margin-top:5px;overflow:hidden}
+.layer-bar-fill{height:100%;border-radius:10px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
+.layer-score2{font-family:var(--display);font-size:18px;font-weight:800;letter-spacing:-0.5px;min-width:32px;text-align:right}
 
-@media(max-width:900px){.signals-grid{grid-template-columns:repeat(2,1fr)}}
-
-.signal-chip {
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:16px;
-  cursor:pointer;
-  transition:all 0.2s;
-  position:relative;
-  overflow:hidden;
-}
-.signal-chip::before{
-  content:'';
-  position:absolute;top:0;left:0;right:0;height:2px;
-  border-radius:2px 2px 0 0;
-  transition:opacity 0.3s;
-}
-.signal-chip:hover{transform:translateY(-2px);border-color:var(--border2)}
-.signal-chip.active-chip{border-color:var(--border2)}
-
-.chip-name{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
-.chip-value{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px}
-.chip-bar-bg{height:3px;background:rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;margin-bottom:8px}
-.chip-bar{height:100%;border-radius:10px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
+/* SIGNALS */
+.signals-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.sec-title{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:-0.3px}
+.sec-sub{font-size:12px;color:var(--text2)}
+.signals-grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:900px){.signals-grid2{grid-template-columns:repeat(2,1fr)}}
+.sig-chip{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
+.sig-chip::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;opacity:0}
+.sig-chip:hover{transform:translateY(-2px);border-color:var(--border2)}
+.chip-n{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:8px}
+.chip-s{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-0.5px;margin-bottom:7px}
+.chip-track{height:2px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;margin-bottom:7px}
+.chip-fill{height:100%;border-radius:10px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
 .chip-raw{font-size:11px;color:var(--text3);font-family:var(--mono)}
 
-/* ── History chart ── */
-.history-section{margin-bottom:16px}
+/* HISTORY */
+.hist-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:16px}
+.hist-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.chart-btns{display:flex;gap:4px;background:rgba(255,255,255,0.03);border-radius:8px;padding:3px}
+.cbtn{padding:5px 12px;border-radius:6px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--text3);transition:all 0.2s}
+.cbtn.on{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
+.chart-area{position:relative;height:200px;margin-top:16px}
 
-.history-card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:20px;
-  padding:28px;
-}
+/* MAGNITUDE */
+.mag-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:20px;transition:all 0.2s}
+.mag-card:hover{border-color:var(--border2)}
+.mag-ico{font-size:28px}
+.mag-body{flex:1}
+.mag-lbl{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:3px}
+.mag-val{font-family:var(--display);font-size:18px;font-weight:700}
+.mag-desc{font-size:12px;color:var(--text2);margin-top:2px}
+.mag-badge{font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:20px;border:1px solid currentColor}
 
-.chart-controls{
-  display:flex;gap:6px;
-  background:rgba(255,255,255,0.03);
-  border-radius:10px;padding:4px;
-  width:fit-content;
-}
-.chart-btn{
-  padding:6px 14px;border-radius:7px;
-  font-family:var(--mono);font-size:11px;letter-spacing:0.5px;
-  cursor:pointer;border:none;background:transparent;color:var(--text3);
-  transition:all 0.2s;
-}
-.chart-btn.active{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
-.chart-btn:not(.active):hover{color:var(--text2)}
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:20px 0;display:flex;justify-content:space-between;align-items:center;color:var(--text3);font-family:var(--mono);font-size:10px;letter-spacing:0.5px;margin-top:8px}
 
-.chart-wrap{position:relative;height:220px;margin-top:20px}
+/* TOOLTIP */
+.tip{position:fixed;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--text);pointer-events:none;opacity:0;transition:opacity 0.15s;z-index:1000;max-width:230px;line-height:1.6}
+.tip.show{opacity:1}
 
-/* ── Layers ── */
-.layers-section{margin-bottom:16px}
+/* ANIMATIONS */
+.fu{opacity:0;transform:translateY(14px);animation:fu 0.5s ease forwards}
+@keyframes fu{to{opacity:1;transform:none}}
+.d1{animation-delay:0.05s}.d2{animation-delay:0.1s}.d3{animation-delay:0.15s}
+.d4{animation-delay:0.2s}.d5{animation-delay:0.25s}.d6{animation-delay:0.3s}
 
-.layers-grid{
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:10px;
-}
-@media(max-width:900px){.layers-grid{grid-template-columns:repeat(2,1fr)}}
-
-.layer-card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:18px 14px;
-  text-align:center;
-  cursor:pointer;
-  transition:all 0.25s;
-  position:relative;
-  overflow:hidden;
-}
-.layer-card:hover{transform:translateY(-3px)}
-
-.layer-icon{font-size:22px;margin-bottom:10px}
-.layer-name{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
-.layer-score-wrap{position:relative;width:56px;height:56px;margin:0 auto 8px}
-.layer-num{
-  position:absolute;inset:0;
-  display:flex;align-items:center;justify-content:center;
-  font-family:var(--display);font-size:18px;font-weight:800;
-}
-
-/* ── Magnitude ── */
-.magnitude-card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:20px;
-  padding:24px 28px;
-  margin-bottom:16px;
-  display:flex;
-  align-items:center;
-  gap:24px;
-  cursor:pointer;
-  transition:all 0.2s;
-}
-.magnitude-card:hover{border-color:var(--border2)}
-.mag-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
-.mag-value{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-0.5px}
-.mag-desc{font-size:12px;color:var(--text2);max-width:500px}
-.mag-icon{font-size:32px}
-
-/* ── Stats row ── */
-.stats-row{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:10px;
-  margin-bottom:16px;
-}
-
-.stat-card{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:20px;
-  transition:all 0.2s;
-  cursor:default;
-}
-.stat-card:hover{border-color:var(--border2)}
-.stat-label{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:8px}
-.stat-value{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-1px}
-.stat-sub{font-size:11px;color:var(--text2);margin-top:4px}
-
-/* ── Footer ── */
-footer{
-  border-top:1px solid var(--border);
-  padding:24px 0;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  color:var(--text3);
-  font-family:var(--mono);
-  font-size:11px;
-  letter-spacing:0.5px;
-  margin-top:16px;
-}
-
-/* ── Tooltip ── */
-.tooltip{
-  position:fixed;
-  background:var(--card2);
-  border:1px solid var(--border2);
-  border-radius:10px;
-  padding:10px 14px;
-  font-family:var(--mono);font-size:11px;color:var(--text);
-  pointer-events:none;
-  opacity:0;
-  transition:opacity 0.15s;
-  z-index:1000;
-  max-width:220px;
-  line-height:1.6;
-}
-.tooltip.show{opacity:1}
-
-/* ── Colour helpers ── */
-.c-up{color:var(--up)}
-.c-down{color:var(--down)}
-.c-neutral{color:var(--neutral)}
-.c-gold{color:var(--gold)}
-
-/* ── Animated entry ── */
-.fade-up{
-  opacity:0;
-  transform:translateY(16px);
-  animation:fadeUp 0.5s ease forwards;
-}
-@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
-
-.delay-1{animation-delay:0.05s}
-.delay-2{animation-delay:0.1s}
-.delay-3{animation-delay:0.15s}
-.delay-4{animation-delay:0.2s}
-.delay-5{animation-delay:0.25s}
-.delay-6{animation-delay:0.3s}
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
-
 </style>
 </head>
 <body>
 
-<div class="bg-canvas">
-  <div class="orb orb1"></div>
-  <div class="orb orb2"></div>
-  <div class="orb orb3"></div>
+<div class="bg-wrap">
+  <div class="bg-orb o1"></div>
+  <div class="bg-orb o2"></div>
+  <div class="bg-orb o3"></div>
 </div>
-<div class="grid-overlay"></div>
+<div class="bg-grid"></div>
+<div class="tip" id="tip"></div>
 
-<div class="tooltip" id="tooltip"></div>
+<div class="wrap">
 
-<div class="container">
+<header class="fu">
+  <div class="logo">
+    <div class="logo-mark">⚡</div>
+    <div>
+      <div class="logo-name">BTC Health Monitor</div>
+      <div class="logo-tag">On-chain intelligence</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <div class="live-pip" id="livePip"></div>
+    <div class="upd" id="upd">—</div>
+    <button class="btn-refresh" id="btnRefresh" onclick="load()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+        <path d="M8 16H3v5"/>
+      </svg>
+      Refresh
+    </button>
+  </div>
+</header>
 
-  <!-- Header -->
-  <header class="fade-up">
-    <div class="logo">
-      <div class="logo-icon">⚡</div>
-      <div>
-        <div class="logo-text">BTC Health Monitor</div>
-        <div class="logo-sub">Market Intelligence</div>
+<div class="loader-wrap" id="loaderWrap">
+  <div class="loader-ring"></div>
+  <div class="loader-text">Fetching market data...</div>
+</div>
+
+<div id="content" style="display:none">
+
+  <!-- FAIR VALUE HERO -->
+  <div class="fv-hero fu d1">
+    <div class="fv-hero-grid">
+      <div class="fv-left">
+        <div class="fv-eyebrow">On-chain fair value</div>
+        <div class="fv-headline" id="fvPrice">$—</div>
+        <div class="fv-subhead" id="fvSubhead">Composite of MVRV cost-basis, 200-day mean reversion,<br>and Puell mining cycle anchors</div>
+        <div class="fv-valuation" id="fvValuation">—</div>
+        <div class="fv-hist" id="fvHist">
+          <div class="fv-hist-item">
+            <div class="fv-hist-label">Current price</div>
+            <div class="fv-hist-value" id="fvCurrentPrice">—</div>
+            <div class="fv-hist-sub">BTC/USDT</div>
+          </div>
+          <div class="fv-hist-item">
+            <div class="fv-hist-label">Gap to fair value</div>
+            <div class="fv-hist-value" id="fvGapPct">—</div>
+            <div class="fv-hist-sub" id="fvGapLabel">—</div>
+          </div>
+          <div class="fv-hist-item">
+            <div class="fv-hist-label">Historical 30d return</div>
+            <div class="fv-hist-value" id="fvMedian">—</div>
+            <div class="fv-hist-sub" id="fvHitRate">— hit rate</div>
+          </div>
+        </div>
+      </div>
+      <div class="fv-right">
+        <div class="gap-meter">
+          <div class="gap-title">Price vs Fair Value</div>
+          <div class="gap-pct" id="gapPct">—</div>
+          <div class="gap-sub" id="gapSub">—</div>
+          <div style="margin:12px 0">
+            <div class="gap-track">
+              <div class="gap-needle" id="gapNeedle" style="left:50%"></div>
+            </div>
+            <div class="gap-labels">
+              <span>-50%</span><span>-25%</span><span>0</span><span>+25%</span><span>+50%</span>
+            </div>
+          </div>
+        </div>
+        <div class="anchors">
+          <div class="anchor-title">Fair value anchors</div>
+          <div class="anchor-row">
+            <div>
+              <div class="anchor-name">MVRV Cost Basis</div>
+              <div class="anchor-wt">Realised Price × 1.7 mean · 40%</div>
+            </div>
+            <div class="anchor-val" id="anchorMvrv">—</div>
+          </div>
+          <div class="anchor-row">
+            <div>
+              <div class="anchor-name">200-Day MA</div>
+              <div class="anchor-wt">Mean reversion anchor · 35%</div>
+            </div>
+            <div class="anchor-val" id="anchor200dma">—</div>
+          </div>
+          <div class="anchor-row">
+            <div>
+              <div class="anchor-name">Puell Mining Cycle</div>
+              <div class="anchor-wt">Miner-adjusted realised · 25%</div>
+            </div>
+            <div class="anchor-val" id="anchorPuell">—</div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="header-right">
-      <div class="live-dot" id="liveDot"></div>
-      <div class="last-update" id="lastUpdate">—</div>
-      <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-          <path d="M21 3v5h-5"/>
-          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-          <path d="M8 16H3v5"/>
-        </svg>
-        Refresh
-      </button>
-    </div>
-  </header>
-
-  <!-- Loading state -->
-  <div class="loading-state" id="loadingState">
-    <div class="loader"></div>
-    <div class="loading-text">Fetching market data...</div>
   </div>
 
-  <!-- Main content -->
-  <div id="mainContent" style="display:none">
-
-    <!-- Hero row -->
-    <div class="hero fade-up delay-1">
-
-      <!-- Price -->
-      <div class="price-card">
-        <div class="price-label">Bitcoin Price</div>
-        <div class="price-value" id="heroPrice">—</div>
-        <div class="price-change" id="heroDate">—</div>
-        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-          <div class="price-label" style="margin-bottom:6px">7D Magnitude</div>
-          <div id="heroMagnitude" style="font-family:var(--display);font-size:15px;font-weight:700">—</div>
-        </div>
+  <!-- ROW 2 -->
+  <div class="row2 fu d2">
+    <div class="card">
+      <div class="card-label">Realised Price</div>
+      <div class="card-value" id="realisedPrice">—</div>
+      <div class="card-sub">Aggregate holder cost basis</div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="card-label" style="margin-bottom:4px">200-Day MA</div>
+        <div style="font-family:var(--display);font-size:20px;font-weight:700" id="dma200">—</div>
+        <div class="card-sub">Technical mean reversion</div>
       </div>
-
-      <!-- Signal orb -->
-      <div class="signal-card">
-        <div style="width:100%;margin-bottom:16px">
-          <div class="tab-group" id="signalTabs">
-            <button class="tab active" data-horizon="7d" onclick="switchHorizon('7d',this)">7D</button>
-            <button class="tab" data-horizon="30d" onclick="switchHorizon('30d',this)">30D</button>
-          </div>
-        </div>
-        <div class="orb-container">
-          <div class="signal-orb orb-neutral" id="signalOrb">—</div>
-        </div>
-        <div class="signal-label">Signal</div>
-        <div class="signal-horizon" id="signalRegime">—</div>
-      </div>
-
-      <!-- Probability -->
-      <div class="prob-card">
-        <div class="price-label" style="margin-bottom:20px">Probability</div>
-        <div class="prob-row">
-          <div class="prob-item">
-            <div class="prob-header">
-              <div class="prob-horizon">7-Day Outlook</div>
-              <div class="prob-pct" id="prob7d">—</div>
-            </div>
-            <div class="prob-bar-bg">
-              <div class="prob-bar" id="probBar7d" style="width:0%"></div>
-            </div>
-            <div class="prob-conf" id="conf7d">Confidence: —</div>
-          </div>
-          <div class="prob-item">
-            <div class="prob-header">
-              <div class="prob-horizon">30-Day Outlook</div>
-              <div class="prob-pct" id="prob30d">—</div>
-            </div>
-            <div class="prob-bar-bg">
-              <div class="prob-bar" id="probBar30d" style="width:0%"></div>
-            </div>
-            <div class="prob-conf" id="conf30d">Confidence: —</div>
-          </div>
-        </div>
-      </div>
-
     </div>
-
-    <!-- Gauge row -->
-    <div class="gauge-section fade-up delay-2">
-      <div class="gauge-card" id="gauge7dCard">
-        <div class="gauge-title">
-          <span>7-Day Composite</span>
-          <span class="gauge-badge" id="badge7d">—</span>
-        </div>
-        <div class="gauge-wrap">
-          <canvas class="gauge-canvas" id="gauge7d" width="180" height="100"></canvas>
-          <div class="gauge-score">
-            <div class="gauge-num" id="gaugeNum7d">—</div>
-            <div class="gauge-label">/ 100</div>
-          </div>
-        </div>
-        <div class="gauge-regime" id="regime7d">—</div>
-        <div class="tab-group">
-          <button class="tab active" onclick="switchGaugeHorizon('7d',this,event)">7D</button>
-          <button class="tab" onclick="switchGaugeHorizon('30d',this,event)">30D</button>
-        </div>
-        <div style="font-size:11px;color:var(--text3);text-align:center;font-family:var(--mono)">
-          UP ≤ 54 · DOWN ≥ 55 · Empirically derived
-        </div>
+    <div class="card">
+      <div class="signal-tabs" id="sigTabs">
+        <button class="stab on" onclick="switchSig('7d',this)">7-Day</button>
+        <button class="stab" onclick="switchSig('30d',this)">30-Day</button>
       </div>
-
-      <div class="gauge-card">
-        <div class="gauge-title">
-          <span>Signal Layers</span>
-          <span style="font-size:11px;color:var(--text3)">5 dimensions</span>
+      <div class="orb-wrap">
+        <div class="sorb neutral" id="sorb">—</div>
+        <div class="sorb-regime" id="sorbRegime">—</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label" style="margin-bottom:16px">Health probability</div>
+      <div class="prob-rows">
+        <div class="prob-row2">
+          <div class="prob-hdr">
+            <div class="prob-lbl">7-Day</div>
+            <div class="prob-pct" id="prob7">—</div>
+          </div>
+          <div class="prob-track"><div class="prob-fill" id="pf7" style="width:0"></div></div>
+          <div class="prob-conf" id="pc7">—</div>
         </div>
-        <div class="layers-grid" style="grid-template-columns:repeat(5,1fr);" id="layersGrid">
-          <!-- populated by JS -->
+        <div class="prob-row2">
+          <div class="prob-hdr">
+            <div class="prob-lbl">30-Day</div>
+            <div class="prob-pct" id="prob30">—</div>
+          </div>
+          <div class="prob-track"><div class="prob-fill" id="pf30" style="width:0"></div></div>
+          <div class="prob-conf" id="pc30">—</div>
         </div>
-        <div style="margin-top:16px;font-size:11px;color:var(--text3);font-family:var(--mono);text-align:center">
-          Hover each layer for details
+        <div class="prob-row2" style="margin-top:4px;padding-top:16px;border-top:1px solid var(--border)">
+          <div class="prob-hdr">
+            <div class="prob-lbl">Magnitude</div>
+            <div style="font-family:var(--display);font-size:14px;font-weight:700" id="magSmall">—</div>
+          </div>
+          <div class="prob-conf" id="magSmallDesc">—</div>
         </div>
       </div>
     </div>
-
-    <!-- Signals grid -->
-    <div class="signals-section fade-up delay-3">
-      <div class="signals-header">
-        <div>
-          <div class="section-title">Signal Breakdown</div>
-          <div class="section-sub">All 11 market indicators</div>
-        </div>
-      </div>
-      <div class="signals-grid" id="signalsGrid">
-        <!-- populated by JS -->
-      </div>
-    </div>
-
-    <!-- History -->
-    <div class="history-section fade-up delay-4">
-      <div class="history-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div class="section-title">Historical Scores</div>
-          <div class="chart-controls">
-            <button class="chart-btn active" onclick="switchChart('composite_7d',this)">7D Score</button>
-            <button class="chart-btn" onclick="switchChart('composite_30d',this)">30D Score</button>
-            <button class="chart-btn" onclick="switchChart('btc_price',this)">BTC Price</button>
-          </div>
-        </div>
-        <div class="chart-wrap">
-          <canvas id="historyChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <!-- Stats row -->
-    <div class="stats-row fade-up delay-5" id="statsRow">
-      <!-- populated by JS -->
-    </div>
-
-    <!-- Footer -->
-    <footer class="fade-up delay-6">
-      <div>BTC Health Monitor · v3.0 · Empirical model</div>
-      <div id="footerMissing">—</div>
-      <div>UP 56.4% · DOWN 53.0% · Backtested 324 weeks</div>
-    </footer>
-
   </div>
-</div>
+
+  <!-- ROW 3: GAUGE + LAYERS -->
+  <div class="row3 fu d3">
+    <div class="card">
+      <div class="gauge-title2">
+        <span>Health Score</span>
+        <span class="gauge-badge2" id="gbadge">—</span>
+      </div>
+      <div class="gauge-wrap2">
+        <canvas id="gauge" width="200" height="110"></canvas>
+        <div class="gauge-score2">
+          <div class="gauge-num2" id="gnum">—</div>
+          <div class="gauge-lbl2">/ 100</div>
+        </div>
+      </div>
+      <div class="gauge-regime2" id="gRegime">—</div>
+      <div class="gauge-tabs">
+        <button class="gauge-tab on" onclick="switchGauge('7d',this)">7D</button>
+        <button class="gauge-tab" onclick="switchGauge('30d',this)">30D</button>
+      </div>
+      <div class="gauge-note">UP ≤ 54 · DOWN ≥ 55 · 324-week backtest</div>
+    </div>
+    <div class="card">
+      <div class="gauge-title2" style="margin-bottom:12px">
+        <span>Signal Layers</span>
+        <span style="font-size:10px;color:var(--text3)">5 dimensions</span>
+      </div>
+      <div class="layers-wrap" id="layersWrap"></div>
+    </div>
+  </div>
+
+  <!-- SIGNALS -->
+  <div class="fu d4">
+    <div class="signals-hdr">
+      <div><div class="sec-title">Signal Breakdown</div><div class="sec-sub">11 market indicators</div></div>
+    </div>
+    <div class="signals-grid2" id="sigGrid"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="hist-card fu d5">
+    <div class="hist-top">
+      <div class="sec-title">Historical</div>
+      <div class="chart-btns">
+        <button class="cbtn on" onclick="switchChart('fair_value_gap_pct',this)">FV Gap %</button>
+        <button class="cbtn" onclick="switchChart('btc_price',this)">BTC Price</button>
+        <button class="cbtn" onclick="switchChart('composite_7d',this)">7D Score</button>
+        <button class="cbtn" onclick="switchChart('composite_30d',this)">30D Score</button>
+      </div>
+    </div>
+    <div class="chart-area"><canvas id="hChart"></canvas></div>
+  </div>
+
+  <!-- MAGNITUDE -->
+  <div class="mag-card fu d5">
+    <div class="mag-ico" id="magIco">—</div>
+    <div class="mag-body">
+      <div class="mag-lbl">Market Magnitude</div>
+      <div class="mag-val" id="magVal">—</div>
+      <div class="mag-desc" id="magDesc">—</div>
+    </div>
+    <div class="mag-badge" id="magBadge">—</div>
+  </div>
+
+  <footer class="fu d6">
+    <div>BTC Health Monitor · v4 · Fair Value Framework</div>
+    <div id="footMissing">—</div>
+    <div>Backtest: UP 56.4% · DOWN 53.0% · 324 weeks</div>
+  </footer>
+
+</div><!-- /content -->
+</div><!-- /wrap -->
 
 <script>
-// ── Config ────────────────────────────────────────────────────
-const SUPABASE_URL = 'https://amrxduglanxsrdkvkbvd.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
+const SB_URL = 'https://amrxduglanxsrdkvkbvd.supabase.co';
+const SB_KEY = 'sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
 
-// ── State ─────────────────────────────────────────────────────
-let snapshot = null;
-let snapHistory = [];
-let horizon  = '7d';
-let historyChart = null;
-let currentChartField = 'composite_7d';
+let snap = null;
+let snapHist = [];
+let sigHorizon = '7d';
+let gaugeHorizon = '7d';
+let hChart = null;
+let chartField = 'fair_value_gap_pct';
 
-// ── Fetch ─────────────────────────────────────────────────────
-async function sb(table, query='') {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
-    headers:{ apikey: SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}` }
+async function sbFetch(table, q='') {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${q}`, {
+    headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}` }
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
 }
 
-async function loadData() {
-  const btn = document.getElementById('refreshBtn');
-  btn.classList.add('loading');
+async function load() {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('spin');
   try {
     const [snaps, hist] = await Promise.all([
-      sb('snapshots','order=created_at.desc&limit=1'),
-      sb('snapshots','order=snapshot_date.asc&limit=60&select=snapshot_date,composite_7d,composite_30d,btc_price,signal_7d,signal_30d,probability_7d,probability_30d')
+      sbFetch('snapshots','order=created_at.desc&limit=1'),
+      sbFetch('snapshots','order=snapshot_date.asc&limit=80&select=snapshot_date,fair_value,fair_value_gap_pct,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,realised_price,dma_200')
     ]);
-    if (snaps && snaps.length) {
-      snapshot = snaps[0];
-      snapHistory = hist || [];
-      render();
-    }
-  } catch(e) {
-    console.error(e);
-  }
-  btn.classList.remove('loading');
+    if (snaps && snaps.length) { snap = snaps[0]; snapHist = hist || []; render(); }
+  } catch(e) { console.error(e); }
+  btn.classList.remove('spin');
 }
 
-// ── Colours ───────────────────────────────────────────────────
+// ── Colour helpers ────────────────────────────────────────────
+function gapColor(pct) {
+  if (pct === null || pct === undefined) return 'var(--text2)';
+  if (pct < -20) return '#00f5a0';
+  if (pct < -8)  return '#44ddaa';
+  if (pct < -2)  return '#88ccbb';
+  if (pct <= 2)  return 'var(--neutral)';
+  if (pct <= 8)  return '#ffaa55';
+  if (pct <= 20) return '#ff7744';
+  return '#ff3366';
+}
 function scoreColor(s) {
   if (s === null) return 'var(--text3)';
   if (s <= 32) return 'var(--up)';
-  if (s <= 45) return '#66ddbb';
+  if (s <= 45) return '#44ddaa';
   if (s <= 54) return 'var(--neutral)';
   if (s <= 68) return 'var(--gold)';
-  if (s <= 80) return '#ff8844';
+  if (s <= 80) return '#ff8833';
   return 'var(--down)';
 }
-
-function signalColor(sig) {
-  if (!sig || sig==='NEUTRAL') return 'var(--neutral)';
-  if (sig==='UP') return 'var(--up)';
-  return 'var(--down)';
+function sigColor(s) {
+  if (!s || s==='NEUTRAL') return 'var(--neutral)';
+  return s==='UP' ? 'var(--up)' : 'var(--down)';
 }
-
-function signalClass(sig) {
-  if (!sig || sig==='NEUTRAL') return 'orb-neutral';
-  if (sig==='UP') return 'orb-up';
-  return 'orb-down';
+function sigClass(s) {
+  if (!s || s==='NEUTRAL') return 'neutral';
+  return s==='UP' ? 'up' : 'down';
 }
-
-function magnitudeColor(m) {
-  if (!m) return 'var(--text2)';
-  const map={EXPLOSIVE:'var(--down)',ELEVATED:'var(--gold)',NORMAL:'var(--neutral)',COMPRESSION:'#66aaff',UNKNOWN:'var(--text3)'};
-  return map[m] || 'var(--text2)';
-}
-
-function magnitudeIcon(m) {
-  const map={EXPLOSIVE:'🔥',ELEVATED:'⚡',NORMAL:'〰️',COMPRESSION:'🧊',UNKNOWN:'—'};
-  return map[m] || '—';
-}
-
-function magnitudeDesc(m) {
-  const map={
-    EXPLOSIVE:'High OI growth + extreme funding — expect large moves, tighten risk.',
-    ELEVATED:'OI rising or funding elevated — conditions heating up.',
-    NORMAL:'Typical market conditions. Standard position sizing.',
-    COMPRESSION:'OI contracting — potential spring loading for a big move.',
-    UNKNOWN:'Insufficient derivatives data to assess magnitude.'
-  };
-  return map[m] || '';
-}
-
-// ── Format ────────────────────────────────────────────────────
-function fmt(v, decimals=2, prefix='') {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'number') return prefix + v.toFixed(decimals);
-  return String(v);
-}
-
 function fmtPrice(v) {
   if (!v) return '—';
   return '$' + Number(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
 }
+function fmtPct(v, decimals=1) {
+  if (v === null || v === undefined) return '—';
+  return (v >= 0 ? '+' : '') + Number(v).toFixed(decimals) + '%';
+}
 
-// ── Signal definitions ────────────────────────────────────────
+const MAG_META = {
+  EXPLOSIVE: { icon:'🔥', color:'var(--down)',   desc:'High OI + extreme funding. Large moves likely. Tighten risk.' },
+  ELEVATED:  { icon:'⚡', color:'var(--gold)',    desc:'OI rising or funding elevated. Conditions heating up.' },
+  NORMAL:    { icon:'〰️', color:'var(--neutral)', desc:'Typical market conditions. Standard position sizing.' },
+  COMPRESSION:{icon:'🧊', color:'#66aaff',        desc:'OI contracting. Potential coiled spring for large move.' },
+  UNKNOWN:   { icon:'—',  color:'var(--text3)',   desc:'Insufficient derivatives data.' },
+};
+
 const SIGNALS = [
-  {key:'score_mvrv_z',   name:'MVRV Z',       rawKey:'mvrv_z',           rawFmt:v=>fmt(v,3),   tip:'Market Value / Realised Value Z-score. High = overvalued vs cost basis.'},
-  {key:'score_nupl',     name:'NUPL',          rawKey:'nupl',             rawFmt:v=>fmt(v,4),   tip:'Net Unrealised Profit/Loss. Measures market-wide profit state.'},
-  {key:'score_sth_sopr', name:'STH SOPR',      rawKey:'sth_sopr',         rawFmt:v=>fmt(v,4),   tip:'Short-term holder Spent Output Profit Ratio. >1 = selling at profit.'},
-  {key:'score_lth_supply',name:'LTH Supply',   rawKey:'lth_supply_4w_change',rawFmt:v=>v?fmt(v,2)+'%':'—', tip:'Long-term holder supply 4-week change. Accumulation vs distribution.'},
-  {key:'score_puell',    name:'Puell Multiple',rawKey:'puell_multiple',   rawFmt:v=>fmt(v,3),   tip:'Daily miner revenue vs annual average. High = miners selling pressure.'},
-  {key:'score_funding_rate',name:'Funding Rate',rawKey:'funding_rate_7d_avg',rawFmt:v=>v?(v*100).toFixed(5)+'%':'—', tip:'7-day avg perpetual funding rate. Positive = longs paying shorts.'},
-  {key:'score_oi_change',name:'OI Change',     rawKey:'oi_change_7d',     rawFmt:v=>v?fmt(v,2)+'%':'—',  tip:'Open Interest 7-day % change. Rising OI = new money entering market.'},
-  {key:'score_long_short',name:'Long/Short',   rawKey:'long_short_ratio', rawFmt:v=>fmt(v,3),   tip:'Global long vs short account ratio. >1.5 = crowded longs.'},
-  {key:'score_top_trader_ls',name:'Top Trader L/S',rawKey:'top_trader_ls_ratio',rawFmt:v=>fmt(v,3), tip:'Top trader position ratio. Strongest DOWN predictor in backtest.'},
-  {key:'score_rsi',      name:'RSI 14D',       rawKey:'rsi_14d',          rawFmt:v=>fmt(v,1),   tip:'14-day Relative Strength Index on daily closes.'},
-  {key:'score_fear_greed',name:'Fear & Greed', rawKey:'fear_greed',       rawFmt:v=>Math.round(v), tip:'Alternative.me Fear & Greed Index. Strongest UP predictor in backtest.'},
+  {k:'score_mvrv_z',    n:'MVRV Z',         rk:'mvrv_z',              rf:v=>v?.toFixed(3),           tip:'Market Value / Realised Value Z-score. Core cycle position indicator.'},
+  {k:'score_nupl',      n:'NUPL',            rk:'nupl',                rf:v=>v?.toFixed(4),           tip:'Net Unrealised Profit/Loss. Market-wide profit state.'},
+  {k:'score_sth_sopr',  n:'STH SOPR',        rk:'sth_sopr',            rf:v=>v?.toFixed(4),           tip:'Short-term holder Spent Output Profit Ratio. >1 = selling at profit.'},
+  {k:'score_lth_supply',n:'LTH Supply',      rk:'lth_supply_4w_change',rf:v=>v?v.toFixed(2)+'%':'—', tip:'Long-term holder supply 4-week change. Accumulation vs distribution.'},
+  {k:'score_puell',     n:'Puell Multiple',  rk:'puell_multiple',      rf:v=>v?.toFixed(3),           tip:'Daily miner revenue vs annual average.'},
+  {k:'score_funding_rate',n:'Funding Rate',  rk:'funding_rate_7d_avg', rf:v=>v?(v*100).toFixed(5)+'%':'—', tip:'7-day avg perpetual funding. Positive = longs paying shorts.'},
+  {k:'score_oi_change', n:'OI Change 7D',    rk:'oi_change_7d',        rf:v=>v?v.toFixed(2)+'%':'—', tip:'Open Interest 7-day % change. Rising = new money entering.'},
+  {k:'score_long_short',n:'Long/Short',      rk:'long_short_ratio',    rf:v=>v?.toFixed(3),           tip:'Global long vs short account ratio. >1.5 = crowded longs.'},
+  {k:'score_top_trader_ls',n:'Top Trader L/S',rk:'top_trader_ls_ratio',rf:v=>v?.toFixed(3),          tip:'Top trader position ratio. Strongest DOWN predictor in backtest (-0.107 corr).'},
+  {k:'score_rsi',       n:'RSI 14D',         rk:'rsi_14d',             rf:v=>v?.toFixed(1),           tip:'14-day Relative Strength Index on daily closes.'},
+  {k:'score_fear_greed',n:'Fear & Greed',    rk:'fear_greed',          rf:v=>Math.round(v),           tip:'Alternative.me index. Strongest UP predictor in backtest (+0.126 corr).'},
 ];
 
 const LAYERS = [
-  {key:'score_valuation', name:'Valuation', icon:'📊', tip:'MVRV Z + NUPL — cycle positioning vs realised cost basis.'},
-  {key:'score_holder',    name:'Holders',   icon:'💎', tip:'STH SOPR + LTH Supply — holder behaviour and distribution.'},
-  {key:'score_mining',    name:'Mining',    icon:'⛏️', tip:'Puell Multiple — miner profitability and selling pressure.'},
-  {key:'score_derivatives',name:'Deriv.',  icon:'📈', tip:'Funding + OI + Long/Short + Top Trader — leverage and positioning.'},
-  {key:'score_sentiment', name:'Sentiment',icon:'🧠', tip:'Fear & Greed + RSI — market sentiment and momentum.'},
+  {k:'score_valuation',  n:'Valuation',   icon:'📊', tip:'MVRV Z + NUPL — cycle position vs realised cost basis.'},
+  {k:'score_holder',     n:'Holders',     icon:'💎', tip:'STH SOPR + LTH Supply — holder behaviour and distribution.'},
+  {k:'score_mining',     n:'Mining',      icon:'⛏️',  tip:'Puell Multiple — miner profitability and selling pressure.'},
+  {k:'score_derivatives',n:'Derivatives', icon:'📈', tip:'Funding + OI + Long/Short + Top Trader — leverage positioning.'},
+  {k:'score_sentiment',  n:'Sentiment',   icon:'🧠', tip:'Fear & Greed + RSI — market sentiment and momentum.'},
 ];
 
-// ── Gauge drawing ─────────────────────────────────────────────
-function drawGauge(canvasId, score, color) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W=180,H=100,cx=90,cy=95,r=72;
-  ctx.clearRect(0,0,W,H);
-
-  const startAngle = Math.PI;
-  const endAngle   = 2*Math.PI;
-
-  // Background arc
-  ctx.beginPath();
-  ctx.arc(cx,cy,r,startAngle,endAngle);
-  ctx.strokeStyle='rgba(255,255,255,0.06)';
-  ctx.lineWidth=8;
-  ctx.lineCap='round';
-  ctx.stroke();
-
-  // Score zones (coloured segments)
-  const zones=[
-    {from:0,to:0.32,color:'rgba(0,255,170,0.5)'},
-    {from:0.32,to:0.54,color:'rgba(123,140,255,0.5)'},
-    {from:0.54,to:0.68,color:'rgba(255,204,68,0.5)'},
-    {from:0.68,to:1,color:'rgba(255,61,110,0.5)'},
-  ];
-  zones.forEach(z=>{
-    const a1=startAngle + z.from*Math.PI;
-    const a2=startAngle + z.to*Math.PI;
-    ctx.beginPath();
-    ctx.arc(cx,cy,r,a1,a2);
-    ctx.strokeStyle=z.color;
-    ctx.lineWidth=4;
-    ctx.stroke();
-  });
-
-  if (score !== null && score !== undefined) {
-    // Fill arc
-    const pct = Math.min(100,Math.max(0,score)) / 100;
-    const fillEnd = startAngle + pct*Math.PI;
-    ctx.beginPath();
-    ctx.arc(cx,cy,r,startAngle,fillEnd);
-    ctx.strokeStyle=color;
-    ctx.lineWidth=8;
-    ctx.lineCap='round';
-    ctx.stroke();
-
-    // Needle
-    const angle = startAngle + pct*Math.PI;
-    const nx = cx + (r-4)*Math.cos(angle);
-    const ny = cy + (r-4)*Math.sin(angle);
-    ctx.beginPath();
-    ctx.moveTo(cx,cy);
-    ctx.lineTo(nx,ny);
-    ctx.strokeStyle=color;
-    ctx.lineWidth=2;
-    ctx.lineCap='round';
-    ctx.stroke();
-
-    // Centre dot
-    ctx.beginPath();
-    ctx.arc(cx,cy,4,0,2*Math.PI);
-    ctx.fillStyle=color;
-    ctx.fill();
-  }
-}
-
-// ── Layer donut ───────────────────────────────────────────────
-function drawLayerDonut(canvasId, score, color) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const cx=28,cy=28,r=22;
-  ctx.clearRect(0,0,56,56);
-  ctx.beginPath();
-  ctx.arc(cx,cy,r,0,2*Math.PI);
-  ctx.strokeStyle='rgba(255,255,255,0.06)';
-  ctx.lineWidth=5;
-  ctx.stroke();
-  if (score !== null && score !== undefined) {
-    const pct = Math.min(100,Math.max(0,score))/100;
-    ctx.beginPath();
-    ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+pct*2*Math.PI);
-    ctx.strokeStyle=color;
-    ctx.lineWidth=5;
-    ctx.lineCap='round';
-    ctx.stroke();
-  }
-}
-
-// ── Render ────────────────────────────────────────────────────
 function render() {
-  if (!snapshot) return;
-  const s = snapshot;
+  const s = snap;
+  document.getElementById('loaderWrap').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
 
-  document.getElementById('loadingState').style.display='none';
-  document.getElementById('mainContent').style.display='block';
-
-  // Last update
+  // Header
   const d = new Date(s.created_at);
-  document.getElementById('lastUpdate').textContent = d.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
+  document.getElementById('upd').textContent = d.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
 
-  // Price
-  document.getElementById('heroPrice').textContent = fmtPrice(s.btc_price);
-  document.getElementById('heroDate').textContent = s.snapshot_date;
+  // ── FAIR VALUE HERO ───────────────────────────────────────
+  const fv  = s.fair_value;
+  const gap = s.fair_value_gap_pct;
+  const col = gapColor(gap);
 
-  // Magnitude
-  const mag = s.magnitude || 'UNKNOWN';
-  document.getElementById('heroMagnitude').textContent = magnitudeIcon(mag)+' '+mag;
-  document.getElementById('heroMagnitude').style.color = magnitudeColor(mag);
+  document.getElementById('fvPrice').textContent = fmtPrice(fv);
+  document.getElementById('fvPrice').style.color = col;
+  document.getElementById('fvCurrentPrice').textContent = fmtPrice(s.btc_price);
+  document.getElementById('fvCurrentPrice').style.color = col;
+
+  const valEl = document.getElementById('fvValuation');
+  valEl.textContent = s.valuation || '—';
+  valEl.style.color = col;
+  valEl.style.background = col + '11';
+  valEl.style.borderColor = col + '44';
+
+  document.getElementById('fvGapPct').textContent = fmtPct(gap);
+  document.getElementById('fvGapPct').style.color = col;
+  document.getElementById('fvGapLabel').textContent = s.fv_historical_label || '—';
+
+  const med = s.fv_median_30d;
+  document.getElementById('fvMedian').textContent = med !== null ? fmtPct(med) : '—';
+  document.getElementById('fvMedian').style.color = med >= 0 ? 'var(--up)' : 'var(--down)';
+  document.getElementById('fvHitRate').textContent = s.fv_hit_rate ? s.fv_hit_rate + '% hit rate' : '—';
+
+  // Gap needle (maps -50% to +50% onto 0%-100% of track)
+  const needlePct = gap !== null ? Math.min(100, Math.max(0, (gap + 50) / 100 * 100)) : 50;
+  document.getElementById('gapNeedle').style.left = needlePct + '%';
+  document.getElementById('gapPct').textContent = fmtPct(gap);
+  document.getElementById('gapPct').style.color = col;
+  document.getElementById('gapSub').textContent = gap < 0 ? 'Discount to fair value' : gap > 0 ? 'Premium to fair value' : 'At fair value';
+
+  // Anchors
+  document.getElementById('anchorMvrv').textContent  = fmtPrice(s.fair_value_anchor_mvrv);
+  document.getElementById('anchor200dma').textContent = fmtPrice(s.fair_value_anchor_200dma || s.dma_200);
+  document.getElementById('anchorPuell').textContent  = fmtPrice(s.fair_value_anchor_puell);
+
+  // Realised price + 200DMA
+  document.getElementById('realisedPrice').textContent = fmtPrice(s.realised_price);
+  document.getElementById('dma200').textContent = fmtPrice(s.dma_200);
 
   // Signal orb
-  renderOrb(horizon);
+  renderOrb(sigHorizon);
 
-  // Probabilities
+  // Probs
   renderProbs();
 
   // Gauge
-  renderGauge('7d');
+  renderGauge(gaugeHorizon);
 
   // Layers
   renderLayers();
 
-  // Signals grid
+  // Signals
   renderSignals();
 
-  // History chart
+  // Chart
   renderChart();
 
-  // Stats
-  renderStats();
+  // Magnitude
+  renderMag();
 
-  // Footer missing
+  // Footer
   const miss = s.signals_missing;
-  document.getElementById('footerMissing').textContent =
-    miss && miss.length ? '⚠ Missing: ' + miss.join(', ') : '✓ All signals live';
+  document.getElementById('footMissing').textContent =
+    miss && miss.length ? '⚠ Missing: '+miss.join(', ') : '✓ All signals live';
 }
 
 function renderOrb(hz) {
-  const s = snapshot;
-  const sig = hz==='7d' ? s.signal_7d : s.signal_30d;
-  const regime = hz==='7d' ? s.regime_7d : s.regime_30d;
-  const orb = document.getElementById('signalOrb');
-  orb.className = 'signal-orb ' + signalClass(sig);
+  const sig    = hz==='7d' ? snap.signal_7d    : snap.signal_30d;
+  const regime = hz==='7d' ? snap.regime_7d    : snap.regime_30d;
+  const orb    = document.getElementById('sorb');
+  orb.className = 'sorb ' + sigClass(sig);
   orb.textContent = sig || '—';
-  document.getElementById('signalRegime').textContent = regime || '—';
-  document.getElementById('signalRegime').style.color = signalColor(sig);
+  const reg = document.getElementById('sorbRegime');
+  reg.textContent = regime || '—';
+  reg.style.color = sigColor(sig);
 }
 
 function renderProbs() {
-  const s = snapshot;
-  const sig7 = s.signal_7d;
-  const sig30 = s.signal_30d;
-  const p7 = s.probability_7d || 50;
-  const p30 = s.probability_30d || 50;
-  const c7 = s.confidence_7d || '—';
-  const c30 = s.confidence_30d || '—';
-
-  const col7 = signalColor(sig7);
-  const col30 = signalColor(sig30);
-
-  document.getElementById('prob7d').textContent = p7+'%';
-  document.getElementById('prob7d').style.color = col7;
-  document.getElementById('probBar7d').style.width = p7+'%';
-  document.getElementById('probBar7d').style.background = col7;
-  document.getElementById('conf7d').textContent = 'Confidence: '+c7+' · '+sig7;
-
-  document.getElementById('prob30d').textContent = p30+'%';
-  document.getElementById('prob30d').style.color = col30;
-  document.getElementById('probBar30d').style.width = p30+'%';
-  document.getElementById('probBar30d').style.background = col30;
-  document.getElementById('conf30d').textContent = 'Confidence: '+c30+' · '+sig30;
+  const s = snap;
+  [[7, s.signal_7d, s.probability_7d, s.confidence_7d],
+   [30, s.signal_30d, s.probability_30d, s.confidence_30d]].forEach(([d,sig,p,c]) => {
+    const col = sigColor(sig);
+    document.getElementById('prob'+d).textContent = (p||50)+'%';
+    document.getElementById('prob'+d).style.color = col;
+    document.getElementById('pf'+d).style.width = (p||50)+'%';
+    document.getElementById('pf'+d).style.background = col;
+    document.getElementById('pc'+d).textContent = 'Confidence: '+(c||'—')+' · '+(sig||'—');
+  });
+  const mag = snap.magnitude || 'UNKNOWN';
+  const mm = MAG_META[mag] || MAG_META.UNKNOWN;
+  document.getElementById('magSmall').textContent = mag;
+  document.getElementById('magSmall').style.color = mm.color;
+  document.getElementById('magSmallDesc').textContent = mm.desc;
 }
 
 function renderGauge(hz) {
-  const s = snapshot;
-  const score = hz==='7d' ? s.composite_7d : s.composite_30d;
-  const regime = hz==='7d' ? s.regime_7d : s.regime_30d;
-  const sig = hz==='7d' ? s.signal_7d : s.signal_30d;
-  const color = scoreColor(score);
+  const s = snap;
+  const score  = hz==='7d' ? s.composite_7d  : s.composite_30d;
+  const regime = hz==='7d' ? s.regime_7d     : s.regime_30d;
+  const sig    = hz==='7d' ? s.signal_7d     : s.signal_30d;
+  const col    = scoreColor(score);
 
-  document.getElementById('gaugeNum7d').textContent = score ?? '—';
-  document.getElementById('gaugeNum7d').style.color = color;
-  document.getElementById('regime7d').textContent = regime || '—';
-  document.getElementById('regime7d').style.color = color;
+  document.getElementById('gnum').textContent = score ?? '—';
+  document.getElementById('gnum').style.color = col;
+  document.getElementById('gRegime').textContent = regime || '—';
+  document.getElementById('gRegime').style.color = col;
 
-  const badge = document.getElementById('badge7d');
+  const badge = document.getElementById('gbadge');
   badge.textContent = sig || '—';
-  badge.style.background = signalColor(sig)+'22';
-  badge.style.color = signalColor(sig);
-  badge.style.border = '1px solid '+signalColor(sig)+'44';
+  badge.style.color = sigColor(sig);
+  badge.style.background = sigColor(sig) + '15';
+  badge.style.border = '1px solid ' + sigColor(sig) + '40';
 
-  drawGauge('gauge7d', score, color);
+  drawGauge('gauge', score, col);
 }
 
 function renderLayers() {
-  const s = snapshot;
-  const grid = document.getElementById('layersGrid');
-  grid.innerHTML = LAYERS.map(l => {
-    const score = s[l.key];
-    const color = scoreColor(score);
+  document.getElementById('layersWrap').innerHTML = LAYERS.map(l => {
+    const score = snap[l.k];
+    const col   = scoreColor(score);
+    const pct   = score ?? 0;
     return `
-      <div class="layer-card" data-tip="${l.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
-        <div class="layer-icon">${l.icon}</div>
-        <div class="layer-name">${l.name}</div>
-        <div class="layer-score-wrap">
-          <canvas id="layer_${l.key}" width="56" height="56"></canvas>
-          <div class="layer-num" style="color:${color}">${score ?? '—'}</div>
+      <div class="layer-row-item" data-tip="${l.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
+        <div class="layer-icon2">${l.icon}</div>
+        <div class="layer-info">
+          <div class="layer-name2">${l.n}</div>
+          <div class="layer-bar-bg">
+            <div class="layer-bar-fill" style="width:${pct}%;background:${col}"></div>
+          </div>
         </div>
-      </div>
-    `;
+        <div class="layer-score2" style="color:${col}">${score ?? '—'}</div>
+      </div>`;
   }).join('');
-  LAYERS.forEach(l => drawLayerDonut('layer_'+l.key, s[l.key], scoreColor(s[l.key])));
 }
 
 function renderSignals() {
-  const s = snapshot;
-  const grid = document.getElementById('signalsGrid');
-  grid.innerHTML = SIGNALS.map(sig => {
-    const score = s[sig.key];
-    const raw   = s[sig.rawKey];
-    const color = scoreColor(score);
-    const pct   = score !== null ? score : 0;
+  document.getElementById('sigGrid').innerHTML = SIGNALS.map(sig => {
+    const score = snap[sig.k];
+    const raw   = snap[sig.rk];
+    const col   = scoreColor(score);
+    const pct   = score ?? 0;
     return `
-      <div class="signal-chip" data-tip="${sig.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
-        <div class="chip-name">${sig.name}</div>
-        <div class="chip-value" style="color:${color}">${score ?? '—'}</div>
-        <div class="chip-bar-bg">
-          <div class="chip-bar" style="width:${pct}%;background:${color}"></div>
-        </div>
-        <div class="chip-raw">${sig.rawFmt(raw)}</div>
-      </div>
-    `;
+      <div class="sig-chip" data-tip="${sig.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
+        <div class="chip-n">${sig.n}</div>
+        <div class="chip-s" style="color:${col}">${score ?? '—'}</div>
+        <div class="chip-track"><div class="chip-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="chip-raw">${raw !== null && raw !== undefined ? sig.rf(raw) : '—'}</div>
+      </div>`;
   }).join('');
 }
 
-function renderChart() {
-  renderChartField(currentChartField);
-}
+function renderChart() { renderChartField(chartField); }
 
 function renderChartField(field) {
-  const ctx = document.getElementById('historyChart').getContext('2d');
-  if (historyChart) historyChart.destroy();
+  const ctx = document.getElementById('hChart').getContext('2d');
+  if (hChart) hChart.destroy();
 
-  const labels = snapHistory.map(h => h.snapshot_date);
-  const data = snapHistory.map(h => h[field]);
+  const labels = snapHist.map(h => h.snapshot_date);
+  const data   = snapHist.map(h => h[field]);
 
-  let color, label;
-  if (field==='btc_price') { color='#7b8cff'; label='BTC Price'; }
-  else if (field==='composite_7d') { color='#00ffaa'; label='7D Score'; }
-  else { color='#a855f7'; label='30D Score'; }
+  const colorMap = {
+    fair_value_gap_pct: '#00f5a0',
+    btc_price:          '#5a6eff',
+    composite_7d:       '#00f5a0',
+    composite_30d:      '#a040ff',
+  };
+  const labelMap = {
+    fair_value_gap_pct: 'FV Gap %',
+    btc_price:          'BTC Price',
+    composite_7d:       '7D Score',
+    composite_30d:      '30D Score',
+  };
 
-  historyChart = new Chart(ctx, {
+  const color = colorMap[field] || '#5a6eff';
+
+  hChart = new Chart(ctx, {
     type:'line',
     data:{
       labels,
       datasets:[{
-        label,
+        label: labelMap[field],
         data,
-        borderColor:color,
-        borderWidth:2,
-        pointRadius:0,
-        pointHoverRadius:4,
-        tension:0.4,
-        fill:true,
-        backgroundColor: ctx2=>{
-          const grad = ctx2.chart.ctx.createLinearGradient(0,0,0,220);
-          grad.addColorStop(0, color+'33');
-          grad.addColorStop(1, color+'00');
-          return grad;
+        borderColor: color,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.4,
+        fill: true,
+        backgroundColor: c2 => {
+          const g = c2.chart.ctx.createLinearGradient(0,0,0,200);
+          g.addColorStop(0, color+'28');
+          g.addColorStop(1, color+'00');
+          return g;
         },
       }]
     },
     options:{
-      responsive:true,
-      maintainAspectRatio:false,
+      responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
       plugins:{
         legend:{display:false},
         tooltip:{
-          backgroundColor:'#0f1428',
-          borderColor:'rgba(100,120,255,0.3)',
+          backgroundColor:'#0c1020',
+          borderColor:'rgba(90,110,255,0.25)',
           borderWidth:1,
-          titleFont:{family:"'Syne Mono'",size:11},
+          titleFont:{family:"'Syne Mono'",size:10},
           bodyFont:{family:"'Syne Mono'",size:11},
           callbacks:{
-            label:ctx2 => {
-              const v=ctx2.raw;
+            label:c2 => {
+              const v = c2.raw;
               if (field==='btc_price') return ' $'+Number(v).toLocaleString();
-              return ' Score: '+v;
+              if (field==='fair_value_gap_pct') return ' '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';
+              return ' '+v;
             }
           }
         }
       },
       scales:{
-        x:{
-          grid:{color:'rgba(100,120,255,0.05)'},
-          ticks:{
-            color:'#3d4270',maxTicksLimit:8,
-            font:{family:"'Syne Mono'",size:10}
-          }
-        },
+        x:{grid:{color:'rgba(90,110,255,0.04)'},ticks:{color:'#333660',maxTicksLimit:8,font:{family:"'Syne Mono'",size:9}}},
         y:{
-          grid:{color:'rgba(100,120,255,0.05)'},
-          ticks:{
-            color:'#3d4270',
-            font:{family:"'Syne Mono'",size:10},
-            callback:v => field==='btc_price' ? '$'+Number(v).toLocaleString() : v
+          grid:{color:'rgba(90,110,255,0.04)'},
+          ticks:{color:'#333660',font:{family:"'Syne Mono'",size:9},
+            callback:v => field==='btc_price' ? '$'+Number(v).toLocaleString() : field==='fair_value_gap_pct' ? (v>=0?'+':'')+v+'%' : v
           },
-          ...(field!=='btc_price' ? {min:0,max:100} : {})
+          ...(field==='composite_7d'||field==='composite_30d' ? {min:0,max:100} : {}),
         }
       }
     }
   });
 }
 
-function renderStats() {
-  const s = snapshot;
-  const items = [
-    {label:'Snapshot Date',value:s.snapshot_date,sub:'Weekly Monday'},
-    {label:'BTC Price',value:fmtPrice(s.btc_price),sub:'At snapshot'},
-    {label:'7D Probability',value:(s.probability_7d||'—')+'%',sub:(s.signal_7d||'—')+' · '+(s.confidence_7d||'—'),color:signalColor(s.signal_7d)},
-    {label:'30D Probability',value:(s.probability_30d||'—')+'%',sub:(s.signal_30d||'—')+' · '+(s.confidence_30d||'—'),color:signalColor(s.signal_30d)},
+function renderMag() {
+  const mag = snap.magnitude || 'UNKNOWN';
+  const mm  = MAG_META[mag] || MAG_META.UNKNOWN;
+  document.getElementById('magIco').textContent  = mm.icon;
+  document.getElementById('magVal').textContent  = mag;
+  document.getElementById('magVal').style.color  = mm.color;
+  document.getElementById('magDesc').textContent = mm.desc;
+  document.getElementById('magBadge').textContent= mag;
+  document.getElementById('magBadge').style.color= mm.color;
+}
+
+// ── Gauge ─────────────────────────────────────────────────────
+function drawGauge(id, score, color) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W=200,H=110,cx=100,cy=100,r=80;
+  ctx.clearRect(0,0,W,H);
+
+  ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,2*Math.PI);
+  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=9;ctx.lineCap='round';ctx.stroke();
+
+  const zones=[
+    {f:0,t:0.32,c:'rgba(0,245,160,0.4)'},
+    {f:0.32,t:0.54,c:'rgba(90,110,255,0.4)'},
+    {f:0.54,t:0.68,c:'rgba(255,204,51,0.4)'},
+    {f:0.68,t:1,c:'rgba(255,51,102,0.4)'},
   ];
-  document.getElementById('statsRow').innerHTML = items.map(i=>`
-    <div class="stat-card">
-      <div class="stat-label">${i.label}</div>
-      <div class="stat-value" ${i.color?`style="color:${i.color}"`:''}>${i.value}</div>
-      <div class="stat-sub">${i.sub}</div>
-    </div>
-  `).join('');
+  zones.forEach(z=>{
+    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI+z.f*Math.PI,Math.PI+z.t*Math.PI);
+    ctx.strokeStyle=z.c;ctx.lineWidth=4;ctx.stroke();
+  });
+
+  if (score !== null && score !== undefined) {
+    const pct = Math.min(100,Math.max(0,score))/100;
+    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,Math.PI+pct*Math.PI);
+    ctx.strokeStyle=color;ctx.lineWidth=9;ctx.lineCap='round';ctx.stroke();
+
+    const a=Math.PI+pct*Math.PI;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+(r-5)*Math.cos(a),cy+(r-5)*Math.sin(a));
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();
+
+    ctx.beginPath();ctx.arc(cx,cy,5,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();
+  }
 }
 
 // ── Interactions ──────────────────────────────────────────────
-function switchHorizon(hz, btn) {
-  horizon = hz;
-  document.querySelectorAll('#signalTabs .tab').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active');
+function switchSig(hz, btn) {
+  sigHorizon = hz;
+  document.querySelectorAll('#sigTabs .stab').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');
   renderOrb(hz);
 }
-
-function switchGaugeHorizon(hz, btn, e) {
-  e.stopPropagation();
-  document.querySelectorAll('.gauge-card .tab-group .tab').forEach(t=>{
-    if(t.closest('.gauge-card')===btn.closest('.gauge-card'))t.classList.remove('active');
-  });
-  btn.classList.add('active');
+function switchGauge(hz, btn) {
+  gaugeHorizon = hz;
+  document.querySelectorAll('.gauge-tab').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');
   renderGauge(hz);
 }
-
 function switchChart(field, btn) {
-  currentChartField = field;
-  document.querySelectorAll('.chart-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  chartField = field;
+  document.querySelectorAll('.cbtn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
   renderChartField(field);
 }
 
 // ── Tooltip ───────────────────────────────────────────────────
-const tip = document.getElementById('tooltip');
+const tipEl = document.getElementById('tip');
 function showTip(e, el) {
-  const text = el.dataset.tip;
-  if (!text) return;
-  tip.textContent = text;
-  tip.classList.add('show');
-  moveTip(e);
-  el.addEventListener('mousemove', moveTip);
+  const t = el.dataset.tip; if (!t) return;
+  tipEl.textContent = t; tipEl.classList.add('show');
+  moveTip(e); el.addEventListener('mousemove', moveTip);
 }
 function moveTip(e) {
-  const x = e.clientX + 12;
-  const y = e.clientY + 12;
-  tip.style.left = Math.min(x, window.innerWidth - 240) + 'px';
-  tip.style.top  = y + 'px';
+  tipEl.style.left = Math.min(e.clientX+14, window.innerWidth-250)+'px';
+  tipEl.style.top  = (e.clientY+14)+'px';
 }
-function hideTip() {
-  tip.classList.remove('show');
-}
+function hideTip() { tipEl.classList.remove('show'); }
 
-// ── Boot ──────────────────────────────────────────────────────
-loadData();
-setInterval(loadData, 5 * 60 * 1000);
+load();
+setInterval(load, 5*60*1000);
 </script>
 </body>
 </html>
