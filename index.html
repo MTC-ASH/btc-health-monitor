@@ -797,7 +797,7 @@ function drawGapChart(ctx, all){
         callbacks:{title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
           label:x=>{const v=x.raw;if(!v)return null;return ' Gap: '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';}}}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:{color:'#b8b4ac',maxTicksLimit:10,font:{family:"'Source Code Pro'",size:9},maxRotation:0,
-            callback:(v,i)=>{const d=valid[i]?.snapshot_date;if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit']);}}},
+            callback:(v,i)=>{const d=valid[i]?.snapshot_date;if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit'});}}},
         y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},
           ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9},callback:v=>(v>=0?'+':'')+v+'%'}}}}
   });
@@ -823,7 +823,7 @@ function drawScoreChart(ctx, all){
         callbacks:{title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
           label:x=>{const v=x.raw;if(!v)return null;return ' Score: '+v;}}}},
       scales:{x:{grid:{display:false},border:{display:false},ticks:{color:'#b8b4ac',maxTicksLimit:10,font:{family:"'Source Code Pro'",size:9},maxRotation:0,
-            callback:(v,i)=>{const d=valid[i]?.snapshot_date;if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit']);}}},
+            callback:(v,i)=>{const d=valid[i]?.snapshot_date;if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit'});}}},
         y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},min:0,max:100,
           ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9}}}}}
   });
