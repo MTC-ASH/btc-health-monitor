@@ -4,911 +4,745 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BTC Health Monitor</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Syne+Mono&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#03040c;--bg2:#070810;--card:#080b18;--card2:#0c1020;
-  --border:rgba(90,110,255,0.1);--border2:rgba(90,110,255,0.2);
-  --text:#dde0ff;--text2:#6b72a8;--text3:#333660;
-  --display:'Syne',sans-serif;--mono:'Syne Mono',monospace;--body:'DM Sans',sans-serif;
-  --up:#00f5a0;--up2:rgba(0,245,160,0.15);
-  --down:#ff3366;--down2:rgba(255,51,102,0.15);
-  --neutral:#5a6eff;--neutral2:rgba(90,110,255,0.15);
-  --gold:#ffcc33;--gold2:rgba(255,204,51,0.15);
-  --deep-under:#00f5a0;--under:#44ddaa;
-  --fair:#5a6eff;
-  --over:#ff8833;--deep-over:#ff3366;
+  --paper:#f5f0e8;
+  --paper2:#ede8df;
+  --paper3:#e4ddd2;
+  --ink:#1a1a14;
+  --ink2:#4a4840;
+  --ink3:#8a8678;
+  --ink4:#b8b4ac;
+  --forest:#1e4030;
+  --forest2:#2a5540;
+  --forest3:#366650;
+  --forest-light:rgba(30,64,48,0.08);
+  --gold:#b8860b;
+  --gold2:#d4a017;
+  --gold-light:rgba(184,134,11,0.1);
+  --rose:#8b3a3a;
+  --rose-light:rgba(139,58,58,0.1);
+  --sky:#2c5f7a;
+  --sky-light:rgba(44,95,122,0.1);
+  --border:#d8d2c8;
+  --border2:#c8c2b8;
+  --display:'Playfair Display',serif;
+  --mono:'DM Mono',monospace;
+  --body:'DM Sans',sans-serif;
 }
 html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:14px;line-height:1.6;min-height:100vh;overflow-x:hidden}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.6;min-height:100vh}
 
-/* BG */
-.bg-wrap{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.bg-orb{position:absolute;border-radius:50%;filter:blur(120px);opacity:0.08;animation:drift 25s ease-in-out infinite}
-.bg-orb.o1{width:700px;height:700px;background:#5a6eff;top:-300px;left:-200px;animation-delay:0s}
-.bg-orb.o2{width:500px;height:500px;background:#a040ff;bottom:-200px;right:-100px;animation-delay:-10s}
-.bg-orb.o3{width:400px;height:400px;background:#00f5a0;top:40%;left:40%;opacity:0.04;animation-delay:-20s}
-@keyframes drift{0%,100%{transform:translate(0,0)}33%{transform:translate(40px,-60px)}66%{transform:translate(-30px,40px)}}
-.bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background-image:linear-gradient(rgba(90,110,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(90,110,255,0.025) 1px,transparent 1px);
-  background-size:80px 80px}
+/* Subtle paper texture */
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity:1;
+}
 
-.wrap{max-width:1240px;margin:0 auto;padding:0 28px;position:relative;z-index:1}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px;position:relative;z-index:1}
 
-/* HEADER */
-header{padding:28px 0 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:36px}
-.logo{display:flex;align-items:center;gap:12px}
-.logo-mark{width:38px;height:38px;background:linear-gradient(135deg,#5a6eff,#a040ff);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;position:relative}
-.logo-mark::after{content:'';position:absolute;inset:0;border-radius:10px;background:linear-gradient(135deg,transparent,rgba(255,255,255,0.15))}
-.logo-name{font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-0.3px}
-.logo-tag{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase}
-.hdr-r{display:flex;align-items:center;gap:14px}
-.live-pip{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up);animation:pip 2s ease-in-out infinite}
-@keyframes pip{0%,100%{opacity:1}50%{opacity:0.4}}
-.upd{font-family:var(--mono);font-size:11px;color:var(--text3)}
-.btn-refresh{display:flex;align-items:center;gap:7px;padding:8px 16px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all 0.2s;letter-spacing:0.5px}
-.btn-refresh:hover{border-color:var(--neutral);color:var(--neutral)}
-.btn-refresh svg{width:13px;height:13px;transition:transform 0.5s}
-.btn-refresh.spin svg{animation:rot 0.8s linear infinite}
+/* ── HEADER ── */
+header{
+  padding:28px 0 24px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:2px solid var(--ink);
+  margin-bottom:40px;
+}
+.logo{display:flex;align-items:baseline;gap:10px}
+.logo-name{font-family:var(--display);font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.5px}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--forest3);margin-bottom:3px;align-self:center;animation:pip 3s ease-in-out infinite}
+@keyframes pip{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.7)}}
+.logo-tag{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:2px;text-transform:uppercase}
+
+.hdr-r{display:flex;align-items:center;gap:16px}
+.upd{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.btn-r{
+  display:flex;align-items:center;gap:7px;
+  padding:8px 16px;background:transparent;
+  border:1px solid var(--border2);border-radius:4px;
+  color:var(--ink2);font-family:var(--mono);font-size:11px;
+  cursor:pointer;transition:all 0.2s;letter-spacing:0.5px;
+}
+.btn-r:hover{border-color:var(--forest);color:var(--forest);background:var(--forest-light)}
+.btn-r svg{width:12px;height:12px;transition:transform 0.5s}
+.btn-r.spin svg{animation:rot 0.8s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
 
-/* LOADER */
-.loader-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px}
-.loader-ring{width:44px;height:44px;border:2px solid var(--border2);border-top-color:var(--neutral);border-radius:50%;animation:rot 0.8s linear infinite}
-.loader-text{font-family:var(--mono);font-size:12px;color:var(--text3);letter-spacing:1px}
+/* ── LOADER ── */
+.loader-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:12px}
+.loader-line{width:200px;height:1px;background:var(--border);position:relative;overflow:hidden}
+.loader-line::after{content:'';position:absolute;inset:0;background:var(--forest3);animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.loader-text{font-family:var(--mono);font-size:11px;color:var(--ink3);letter-spacing:2px;text-transform:uppercase}
 
-/* FAIR VALUE HERO — THE CENTREPIECE */
-.fv-hero{
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:24px;
-  padding:40px;
-  margin-bottom:16px;
-  position:relative;
-  overflow:hidden;
-}
-.fv-hero::before{
-  content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse at 60% 0%,rgba(90,110,255,0.06),transparent 60%);
-}
-.fv-hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;position:relative}
-.fv-left{}
-.fv-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:2.5px;color:var(--text3);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.fv-eyebrow::before{content:'';display:inline-block;width:20px;height:1px;background:var(--text3)}
-.fv-headline{font-family:var(--display);font-size:48px;font-weight:800;letter-spacing:-3px;line-height:1;margin-bottom:8px}
-.fv-subhead{font-family:var(--body);font-size:15px;color:var(--text2);margin-bottom:32px;font-weight:300;line-height:1.5}
-.fv-valuation{
-  display:inline-flex;align-items:center;gap:10px;
-  padding:10px 20px;border-radius:12px;
-  font-family:var(--display);font-size:15px;font-weight:700;
+/* ── FAIR VALUE HERO ── */
+.fv-section{
+  padding:40px 0 36px;
+  border-bottom:1px solid var(--border);
   margin-bottom:32px;
-  border:1px solid currentColor;
-  transition:all 0.5s;
 }
-.fv-hist{
-  background:var(--card2);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:18px 20px;
-  display:flex;gap:24px;
+.fv-kicker{
+  font-family:var(--mono);font-size:10px;letter-spacing:3px;
+  color:var(--ink3);text-transform:uppercase;margin-bottom:10px;
 }
-.fv-hist-item{text-align:center;flex:1}
-.fv-hist-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:6px}
-.fv-hist-value{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-1px}
-.fv-hist-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.fv-main{display:grid;grid-template-columns:1fr auto;gap:40px;align-items:start}
+.fv-left{}
+.fv-headline{
+  font-family:var(--display);font-size:58px;font-weight:700;
+  letter-spacing:-2px;line-height:1;margin-bottom:6px;
+  color:var(--ink);
+}
+.fv-valuation{
+  display:inline-block;
+  font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;
+  padding:4px 12px;border-radius:2px;margin-bottom:24px;
+}
+.fv-row{display:flex;gap:40px;margin-bottom:0}
+.fv-stat{}
+.fv-stat-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:4px}
+.fv-stat-value{font-family:var(--display);font-size:26px;font-weight:600;letter-spacing:-1px;line-height:1}
+.fv-stat-sub{font-size:11px;color:var(--ink3);margin-top:2px}
 
-.fv-right{display:flex;flex-direction:column;align-items:center;gap:24px}
+.fv-right{min-width:340px}
 
-/* Gap meter */
-.gap-meter{width:100%;max-width:320px}
-.gap-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:16px;text-align:center}
-.gap-track{
-  position:relative;height:10px;border-radius:20px;
-  background:linear-gradient(to right,
-    var(--deep-under) 0%,
-    var(--under) 20%,
-    var(--fair) 40%,
-    var(--fair) 60%,
-    var(--over) 80%,
-    var(--deep-over) 100%
-  );
-  margin-bottom:8px;
+/* Gap bar */
+.gap-bar-wrap{margin-bottom:28px}
+.gap-bar-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between}
+.gap-bar-track{
+  height:6px;border-radius:1px;position:relative;overflow:hidden;
+  background:linear-gradient(to right,#1e4030,#2a5540,#b8b4ac,#b8860b,#8b3a3a);
+  margin-bottom:6px;
 }
-.gap-needle{
-  position:absolute;top:50%;transform:translate(-50%,-50%);
-  width:4px;height:20px;background:#fff;border-radius:2px;
-  box-shadow:0 0 8px rgba(255,255,255,0.6);
+.gap-bar-needle{
+  position:absolute;top:-3px;width:2px;height:12px;
+  background:var(--ink);border-radius:1px;
+  box-shadow:0 0 4px rgba(0,0,0,0.3);
   transition:left 1.5s cubic-bezier(0.23,1,0.32,1);
 }
-.gap-labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--text3)}
-.gap-pct{text-align:center;font-family:var(--display);font-size:28px;font-weight:800;letter-spacing:-1px;margin-bottom:4px}
-.gap-sub{text-align:center;font-size:12px;color:var(--text2)}
+.gap-pct-big{font-family:var(--display);font-size:32px;font-weight:700;letter-spacing:-1.5px}
+.gap-direction{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink3);margin-top:2px}
 
-/* Anchors */
-.anchors{width:100%;max-width:320px}
-.anchor-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:12px}
-.anchor-row{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:10px 0;border-bottom:1px solid var(--border);
+/* Anchors table */
+.anchors-table{width:100%;border-collapse:collapse}
+.anchors-table td{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.anchors-table tr:last-child td{border-bottom:none}
+.at-name{color:var(--ink2);font-family:var(--body)}
+.at-weight{font-family:var(--mono);font-size:10px;color:var(--ink4);text-align:right;padding-right:16px}
+.at-value{font-family:var(--mono);font-size:13px;font-weight:500;text-align:right}
+
+/* Historical context box */
+.hist-box{
+  margin-top:16px;padding:14px 16px;
+  background:var(--paper2);
+  border:1px solid var(--border);
+  border-left:3px solid var(--forest3);
+  border-radius:2px;
 }
-.anchor-row:last-child{border:none}
-.anchor-name{font-family:var(--mono);font-size:11px;color:var(--text2)}
-.anchor-val{font-family:var(--display);font-size:15px;font-weight:700}
-.anchor-wt{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:1px}
+.hist-box-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:8px}
+.hist-box-stats{display:flex;gap:24px}
+.hbs{}
+.hbs-v{font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:-0.5px}
+.hbs-l{font-size:11px;color:var(--ink3);margin-top:1px}
 
-/* ROW 2: PRICE + HEALTH + PROBABILITY */
-.row2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+/* ── SIGNAL + HEALTH ROW ── */
+.row2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:32px}
+.r2-cell{background:var(--paper);padding:24px;transition:background 0.2s}
+.r2-cell:hover{background:var(--paper2)}
+.cell-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:12px}
+.cell-value{font-family:var(--display);font-size:32px;font-weight:700;letter-spacing:-1.5px;line-height:1;margin-bottom:4px}
+.cell-sub{font-size:12px;color:var(--ink3)}
 
-.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:24px;position:relative;overflow:hidden;transition:border-color 0.3s}
-.card:hover{border-color:var(--border2)}
-.card-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
-.card-value{font-family:var(--display);font-size:32px;font-weight:800;letter-spacing:-1.5px;line-height:1}
-.card-sub{font-size:12px;color:var(--text2);margin-top:6px}
+/* Signal display */
+.sig-display{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.sig-tabs2{display:flex;gap:0;border:1px solid var(--border2);border-radius:3px;overflow:hidden;margin-bottom:4px}
+.stab2{padding:5px 14px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--ink3);transition:all 0.15s}
+.stab2.on{background:var(--forest);color:#fff}
+.sig-big{font-family:var(--display);font-size:42px;font-weight:700;letter-spacing:-2px;line-height:1}
+.sig-regime{font-family:var(--mono);font-size:10px;letter-spacing:1px;margin-top:4px}
 
-/* Signal orb */
-.orb-wrap{display:flex;flex-direction:column;align-items:center}
-.signal-tabs{display:flex;gap:4px;width:100%;background:rgba(255,255,255,0.03);border-radius:8px;padding:3px;margin-bottom:16px}
-.stab{flex:1;padding:5px;border-radius:6px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--text3);transition:all 0.2s}
-.stab.on{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
-.sorb{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;position:relative;transition:all 0.5s;margin-bottom:12px}
-.sorb::before,.sorb::after{content:'';position:absolute;border-radius:50%;border:1px solid currentColor;animation:ring 3s ease-in-out infinite}
-.sorb::before{inset:-10px;opacity:0.15}
-.sorb::after{inset:-20px;opacity:0.06;animation-delay:0.4s}
-@keyframes ring{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-.sorb.up{background:radial-gradient(circle at 35% 35%,rgba(0,245,160,0.25),rgba(0,245,160,0.05));border:1.5px solid rgba(0,245,160,0.4);color:var(--up);box-shadow:0 0 32px rgba(0,245,160,0.15)}
-.sorb.down{background:radial-gradient(circle at 35% 35%,rgba(255,51,102,0.25),rgba(255,51,102,0.05));border:1.5px solid rgba(255,51,102,0.4);color:var(--down);box-shadow:0 0 32px rgba(255,51,102,0.15)}
-.sorb.neutral{background:radial-gradient(circle at 35% 35%,rgba(90,110,255,0.25),rgba(90,110,255,0.05));border:1.5px solid rgba(90,110,255,0.4);color:var(--neutral);box-shadow:0 0 32px rgba(90,110,255,0.15)}
-.sorb-regime{font-family:var(--display);font-size:13px;font-weight:600;text-align:center}
+/* Prob display */
+.prob-stack{display:flex;flex-direction:column;gap:12px}
+.prob-item2{}
+.prob-hdr2{display:flex;justify-content:space-between;margin-bottom:5px}
+.prob-lbl2{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink3);text-transform:uppercase}
+.prob-val2{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-0.5px}
+.prob-track2{height:3px;background:var(--paper3);border-radius:1px;overflow:hidden;margin-bottom:4px}
+.prob-fill2{height:100%;border-radius:1px;transition:width 1.4s cubic-bezier(0.23,1,0.32,1)}
+.prob-conf2{font-family:var(--mono);font-size:10px;color:var(--ink3)}
 
-/* Prob bars */
-.prob-rows{display:flex;flex-direction:column;gap:16px;margin-top:4px}
-.prob-row2{} 
-.prob-hdr{display:flex;justify-content:space-between;margin-bottom:7px}
-.prob-lbl{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase}
-.prob-pct{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-0.5px}
-.prob-track{height:4px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;margin-bottom:5px}
-.prob-fill{height:100%;border-radius:10px;transition:width 1.4s cubic-bezier(0.23,1,0.32,1)}
-.prob-conf{font-family:var(--mono);font-size:10px;color:var(--text3)}
+/* ── HEALTH GAUGE ── */
+.gauge-section{display:grid;grid-template-columns:280px 1fr;gap:32px;margin-bottom:32px;align-items:start}
+.gauge-card2{background:var(--paper2);border:1px solid var(--border);padding:24px}
+.gauge-title3{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:16px;display:flex;justify-content:space-between}
+.gauge-wrap3{position:relative;width:200px;height:110px;margin:0 auto 12px}
+.gauge-score3{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}
+.gauge-num3{font-family:var(--display);font-size:44px;font-weight:700;letter-spacing:-2px;line-height:1}
+.gauge-denom{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:1px}
+.gauge-regime3{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;margin:8px 0 14px}
+.gauge-tabs2{display:flex;gap:0;border:1px solid var(--border2);border-radius:3px;overflow:hidden;width:fit-content;margin:0 auto 12px}
+.gtab2{padding:4px 14px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--ink3);transition:all 0.15s}
+.gtab2.on{background:var(--forest);color:#fff}
+.gauge-note2{text-align:center;font-family:var(--mono);font-size:9px;color:var(--ink4);letter-spacing:0.5px}
 
-/* GAUGE + LAYERS ROW */
-.row3{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-
-.gauge-title2{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
-.gauge-badge2{font-size:10px;padding:2px 10px;border-radius:20px;font-family:var(--mono)}
-.gauge-wrap2{position:relative;width:200px;height:110px;margin:16px auto 8px}
-.gauge-score2{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}
-.gauge-num2{font-family:var(--display);font-size:42px;font-weight:800;letter-spacing:-2px;line-height:1}
-.gauge-lbl2{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px}
-.gauge-regime2{text-align:center;font-family:var(--display);font-size:13px;font-weight:600;margin:10px 0 14px}
-.gauge-tabs{display:flex;gap:4px;background:rgba(255,255,255,0.03);border-radius:8px;padding:3px;margin-bottom:14px}
-.gauge-tab{flex:1;padding:5px;border-radius:6px;font-family:var(--mono);font-size:10px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--text3);transition:all 0.2s}
-.gauge-tab.on{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
-.gauge-note{text-align:center;font-family:var(--mono);font-size:10px;color:var(--text3)}
-
-.layers-wrap{display:flex;flex-direction:column;gap:8px;height:100%}
-.layer-row-item{
-  display:flex;align-items:center;gap:14px;
-  background:var(--card2);border:1px solid var(--border);
-  border-radius:12px;padding:12px 16px;
-  cursor:pointer;transition:all 0.2s;flex:1;
+/* ── LAYERS ── */
+.layers-side{display:flex;flex-direction:column;gap:6px}
+.layer-strip{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px;background:var(--paper2);
+  border:1px solid var(--border);
+  border-radius:2px;cursor:pointer;transition:all 0.15s;
 }
-.layer-row-item:hover{border-color:var(--border2);transform:translateX(3px)}
-.layer-icon2{font-size:18px;min-width:24px}
-.layer-info{flex:1}
-.layer-name2{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase}
-.layer-bar-bg{height:3px;background:rgba(255,255,255,0.05);border-radius:10px;margin-top:5px;overflow:hidden}
-.layer-bar-fill{height:100%;border-radius:10px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
-.layer-score2{font-family:var(--display);font-size:18px;font-weight:800;letter-spacing:-0.5px;min-width:32px;text-align:right}
+.layer-strip:hover{background:var(--paper3);border-color:var(--border2)}
+.ls-icon{font-size:16px;min-width:20px}
+.ls-name{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink2);text-transform:uppercase;min-width:80px}
+.ls-bar-bg{flex:1;height:3px;background:var(--border);border-radius:1px;overflow:hidden}
+.ls-bar-fill{height:100%;border-radius:1px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
+.ls-score{font-family:var(--mono);font-size:13px;font-weight:500;min-width:28px;text-align:right}
 
-/* SIGNALS */
-.signals-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.sec-title{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:-0.3px}
-.sec-sub{font-size:12px;color:var(--text2)}
-.signals-grid2{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
-@media(max-width:900px){.signals-grid2{grid-template-columns:repeat(2,1fr)}}
-.sig-chip{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
-.sig-chip::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;opacity:0}
-.sig-chip:hover{transform:translateY(-2px);border-color:var(--border2)}
-.chip-n{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:8px}
-.chip-s{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-0.5px;margin-bottom:7px}
-.chip-track{height:2px;background:rgba(255,255,255,0.05);border-radius:10px;overflow:hidden;margin-bottom:7px}
-.chip-fill{height:100%;border-radius:10px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
-.chip-raw{font-size:11px;color:var(--text3);font-family:var(--mono)}
+/* ── SIGNALS GRID ── */
+.sig-section{margin-bottom:32px}
+.sec-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.sec-ttl{font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:-0.3px}
+.sec-sub2{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:1px}
+.sig-table{width:100%;border-collapse:collapse}
+.sig-table th{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase;padding:0 0 8px;border-bottom:1px solid var(--border);text-align:left;font-weight:400}
+.sig-table th:last-child,.sig-table td:last-child{text-align:right}
+.sig-table th:nth-child(3),.sig-table td:nth-child(3){text-align:center}
+.sig-table td{padding:10px 0;border-bottom:1px solid var(--paper3);font-size:13px;vertical-align:middle}
+.sig-table tr:last-child td{border-bottom:none}
+.sig-table tr{transition:background 0.1s;cursor:default}
+.sig-table tr:hover td{background:var(--paper2)}
+.td-name{font-family:var(--body);color:var(--ink2)}
+.td-score{font-family:var(--mono);font-size:14px;font-weight:500}
+.td-bar{width:120px}
+.td-bar-bg{height:3px;background:var(--paper3);border-radius:1px;overflow:hidden}
+.td-bar-fill{height:100%;border-radius:1px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
+.td-raw{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.td-tip{font-size:11px;color:var(--ink4);font-style:italic}
 
-/* HISTORY */
-.hist-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:16px}
-.hist-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-.chart-btns{display:flex;gap:4px;background:rgba(255,255,255,0.03);border-radius:8px;padding:3px}
-.cbtn{padding:5px 12px;border-radius:6px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--text3);transition:all 0.2s}
-.cbtn.on{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
-.chart-area{position:relative;height:200px;margin-top:16px}
+/* ── HISTORY ── */
+.hist-section{margin-bottom:32px;background:var(--paper2);border:1px solid var(--border);padding:24px}
+.hist-top2{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.chart-btns2{display:flex;gap:0;border:1px solid var(--border2);border-radius:3px;overflow:hidden}
+.cbtn2{padding:5px 12px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--ink3);transition:all 0.15s;border-right:1px solid var(--border2)}
+.cbtn2:last-child{border-right:none}
+.cbtn2.on{background:var(--forest);color:#fff}
+.chart-area2{position:relative;height:180px}
 
-/* MAGNITUDE */
-.mag-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:20px;transition:all 0.2s}
-.mag-card:hover{border-color:var(--border2)}
-.mag-ico{font-size:28px}
-.mag-body{flex:1}
-.mag-lbl{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:3px}
-.mag-val{font-family:var(--display);font-size:18px;font-weight:700}
-.mag-desc{font-size:12px;color:var(--text2);margin-top:2px}
-.mag-badge{font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:20px;border:1px solid currentColor}
+/* ── FOOTER ── */
+footer{border-top:2px solid var(--ink);padding:20px 0;display:flex;justify-content:space-between;color:var(--ink3);font-family:var(--mono);font-size:10px;letter-spacing:0.5px;margin-top:8px}
 
-/* FOOTER */
-footer{border-top:1px solid var(--border);padding:20px 0;display:flex;justify-content:space-between;align-items:center;color:var(--text3);font-family:var(--mono);font-size:10px;letter-spacing:0.5px;margin-top:8px}
-
-/* TOOLTIP */
-.tip{position:fixed;background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--text);pointer-events:none;opacity:0;transition:opacity 0.15s;z-index:1000;max-width:230px;line-height:1.6}
+/* ── TOOLTIP ── */
+.tip{position:fixed;background:var(--ink);color:var(--paper);border-radius:3px;padding:8px 12px;font-family:var(--mono);font-size:11px;pointer-events:none;opacity:0;transition:opacity 0.1s;z-index:1000;max-width:240px;line-height:1.5}
 .tip.show{opacity:1}
 
-/* ANIMATIONS */
-.fu{opacity:0;transform:translateY(14px);animation:fu 0.5s ease forwards}
+/* ── ANIMATIONS ── */
+.fu{opacity:0;transform:translateY(12px);animation:fu 0.5s ease forwards}
 @keyframes fu{to{opacity:1;transform:none}}
-.d1{animation-delay:0.05s}.d2{animation-delay:0.1s}.d3{animation-delay:0.15s}
-.d4{animation-delay:0.2s}.d5{animation-delay:0.25s}.d6{animation-delay:0.3s}
+.d1{animation-delay:.06s}.d2{animation-delay:.12s}.d3{animation-delay:.18s}
+.d4{animation-delay:.24s}.d5{animation-delay:.30s}
 
 ::-webkit-scrollbar{width:4px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
+::-webkit-scrollbar-track{background:var(--paper)}
+::-webkit-scrollbar-thumb{background:var(--border2)}
 </style>
 </head>
 <body>
-
-<div class="bg-wrap">
-  <div class="bg-orb o1"></div>
-  <div class="bg-orb o2"></div>
-  <div class="bg-orb o3"></div>
-</div>
-<div class="bg-grid"></div>
 <div class="tip" id="tip"></div>
-
 <div class="wrap">
 
+<!-- HEADER -->
 <header class="fu">
   <div class="logo">
-    <div class="logo-mark">⚡</div>
-    <div>
-      <div class="logo-name">BTC Health Monitor</div>
-      <div class="logo-tag">On-chain intelligence</div>
-    </div>
+    <div class="logo-name">BTC Health Monitor</div>
+    <div class="logo-dot"></div>
+    <div class="logo-tag">On-chain intelligence</div>
   </div>
   <div class="hdr-r">
-    <div class="live-pip" id="livePip"></div>
     <div class="upd" id="upd">—</div>
-    <button class="btn-refresh" id="btnRefresh" onclick="load()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-        <path d="M21 3v5h-5"/>
-        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-        <path d="M8 16H3v5"/>
-      </svg>
+    <button class="btn-r" id="btnR" onclick="load()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
       Refresh
     </button>
   </div>
 </header>
 
+<!-- LOADER -->
 <div class="loader-wrap" id="loaderWrap">
-  <div class="loader-ring"></div>
-  <div class="loader-text">Fetching market data...</div>
+  <div class="loader-line"></div>
+  <div class="loader-text">Fetching market data</div>
 </div>
 
 <div id="content" style="display:none">
 
-  <!-- FAIR VALUE HERO -->
-  <div class="fv-hero fu d1">
-    <div class="fv-hero-grid">
-      <div class="fv-left">
-        <div class="fv-eyebrow">On-chain fair value</div>
-        <div class="fv-headline" id="fvPrice">$—</div>
-        <div class="fv-subhead" id="fvSubhead">Composite of MVRV cost-basis, 200-day mean reversion,<br>and Puell mining cycle anchors</div>
-        <div class="fv-valuation" id="fvValuation">—</div>
-        <div class="fv-hist" id="fvHist">
-          <div class="fv-hist-item">
-            <div class="fv-hist-label">Current price</div>
-            <div class="fv-hist-value" id="fvCurrentPrice">—</div>
-            <div class="fv-hist-sub">BTC/USDT</div>
-          </div>
-          <div class="fv-hist-item">
-            <div class="fv-hist-label">Gap to fair value</div>
-            <div class="fv-hist-value" id="fvGapPct">—</div>
-            <div class="fv-hist-sub" id="fvGapLabel">—</div>
-          </div>
-          <div class="fv-hist-item">
-            <div class="fv-hist-label">Historical 30d return</div>
-            <div class="fv-hist-value" id="fvMedian">—</div>
-            <div class="fv-hist-sub" id="fvHitRate">— hit rate</div>
-          </div>
+<!-- FAIR VALUE HERO -->
+<div class="fv-section fu d1">
+  <div class="fv-kicker">On-chain composite fair value</div>
+  <div class="fv-main">
+    <div class="fv-left">
+      <div class="fv-headline" id="fvPrice">$—</div>
+      <div class="fv-valuation" id="fvVal">—</div>
+      <div class="fv-row">
+        <div class="fv-stat">
+          <div class="fv-stat-label">Current price</div>
+          <div class="fv-stat-value" id="fvCurrent">—</div>
+          <div class="fv-stat-sub">BTC/USD</div>
         </div>
-      </div>
-      <div class="fv-right">
-        <div class="gap-meter">
-          <div class="gap-title">Price vs Fair Value</div>
-          <div class="gap-pct" id="gapPct">—</div>
-          <div class="gap-sub" id="gapSub">—</div>
-          <div style="margin:12px 0">
-            <div class="gap-track">
-              <div class="gap-needle" id="gapNeedle" style="left:50%"></div>
-            </div>
-            <div class="gap-labels">
-              <span>-50%</span><span>-25%</span><span>0</span><span>+25%</span><span>+50%</span>
-            </div>
-          </div>
+        <div class="fv-stat">
+          <div class="fv-stat-label">Gap to fair value</div>
+          <div class="fv-stat-value" id="fvGap">—</div>
+          <div class="fv-stat-sub" id="fvGapLbl">—</div>
         </div>
-        <div class="anchors">
-          <div class="anchor-title">Fair value anchors</div>
-          <div class="anchor-row">
-            <div>
-              <div class="anchor-name">MVRV Cost Basis</div>
-              <div class="anchor-wt">Realised Price × 1.7 mean · 40%</div>
-            </div>
-            <div class="anchor-val" id="anchorMvrv">—</div>
-          </div>
-          <div class="anchor-row">
-            <div>
-              <div class="anchor-name">200-Day MA</div>
-              <div class="anchor-wt">Mean reversion anchor · 35%</div>
-            </div>
-            <div class="anchor-val" id="anchor200dma">—</div>
-          </div>
-          <div class="anchor-row">
-            <div>
-              <div class="anchor-name">Puell Mining Cycle</div>
-              <div class="anchor-wt">Miner-adjusted realised · 25%</div>
-            </div>
-            <div class="anchor-val" id="anchorPuell">—</div>
-          </div>
+        <div class="fv-stat">
+          <div class="fv-stat-label">Hist. 30d median</div>
+          <div class="fv-stat-value" id="fvMedian">—</div>
+          <div class="fv-stat-sub" id="fvHR">—</div>
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ROW 2 -->
-  <div class="row2 fu d2">
-    <div class="card">
-      <div class="card-label">Realised Price</div>
-      <div class="card-value" id="realisedPrice">—</div>
-      <div class="card-sub">Aggregate holder cost basis</div>
-      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-        <div class="card-label" style="margin-bottom:4px">200-Day MA</div>
-        <div style="font-family:var(--display);font-size:20px;font-weight:700" id="dma200">—</div>
-        <div class="card-sub">Technical mean reversion</div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="signal-tabs" id="sigTabs">
-        <button class="stab on" onclick="switchSig('7d',this)">7-Day</button>
-        <button class="stab" onclick="switchSig('30d',this)">30-Day</button>
-      </div>
-      <div class="orb-wrap">
-        <div class="sorb neutral" id="sorb">—</div>
-        <div class="sorb-regime" id="sorbRegime">—</div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-label" style="margin-bottom:16px">Health probability</div>
-      <div class="prob-rows">
-        <div class="prob-row2">
-          <div class="prob-hdr">
-            <div class="prob-lbl">7-Day</div>
-            <div class="prob-pct" id="prob7">—</div>
-          </div>
-          <div class="prob-track"><div class="prob-fill" id="pf7" style="width:0"></div></div>
-          <div class="prob-conf" id="pc7">—</div>
+    <div class="fv-right">
+      <div class="gap-bar-wrap">
+        <div class="gap-bar-label">
+          <span>Deeply undervalued</span>
+          <span>Deeply overvalued</span>
         </div>
-        <div class="prob-row2">
-          <div class="prob-hdr">
-            <div class="prob-lbl">30-Day</div>
-            <div class="prob-pct" id="prob30">—</div>
-          </div>
-          <div class="prob-track"><div class="prob-fill" id="pf30" style="width:0"></div></div>
-          <div class="prob-conf" id="pc30">—</div>
+        <div class="gap-bar-track">
+          <div class="gap-bar-needle" id="gapNeedle" style="left:50%"></div>
         </div>
-        <div class="prob-row2" style="margin-top:4px;padding-top:16px;border-top:1px solid var(--border)">
-          <div class="prob-hdr">
-            <div class="prob-lbl">Magnitude</div>
-            <div style="font-family:var(--display);font-size:14px;font-weight:700" id="magSmall">—</div>
-          </div>
-          <div class="prob-conf" id="magSmallDesc">—</div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--ink4)">-50%</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--ink4)">0</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--ink4)">+50%</span>
+        </div>
+        <div style="text-align:center;margin-top:10px">
+          <div class="gap-pct-big" id="gapBig">—</div>
+          <div class="gap-direction" id="gapDir">—</div>
+        </div>
+      </div>
+      <table class="anchors-table">
+        <tr>
+          <td class="at-name">MVRV Cost Basis</td>
+          <td class="at-weight">40%</td>
+          <td class="at-value" id="anMvrv">—</td>
+        </tr>
+        <tr>
+          <td class="at-name">200-Day Moving Average</td>
+          <td class="at-weight">35%</td>
+          <td class="at-value" id="an200">—</td>
+        </tr>
+        <tr>
+          <td class="at-name">Puell Mining Cycle</td>
+          <td class="at-weight">25%</td>
+          <td class="at-value" id="anPuell">—</td>
+        </tr>
+      </table>
+      <div class="hist-box">
+        <div class="hist-box-label">Historical precedent at this gap level</div>
+        <div class="hist-box-stats">
+          <div class="hbs"><div class="hbs-v" id="hbMedian">—</div><div class="hbs-l">Median 30d return</div></div>
+          <div class="hbs"><div class="hbs-v" id="hbHR">—</div><div class="hbs-l">Hit rate</div></div>
+          <div class="hbs"><div class="hbs-v" id="hbDir">—</div><div class="hbs-l">Direction bias</div></div>
         </div>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- ROW 3: GAUGE + LAYERS -->
-  <div class="row3 fu d3">
-    <div class="card">
-      <div class="gauge-title2">
-        <span>Health Score</span>
-        <span class="gauge-badge2" id="gbadge">—</span>
-      </div>
-      <div class="gauge-wrap2">
-        <canvas id="gauge" width="200" height="110"></canvas>
-        <div class="gauge-score2">
-          <div class="gauge-num2" id="gnum">—</div>
-          <div class="gauge-lbl2">/ 100</div>
-        </div>
-      </div>
-      <div class="gauge-regime2" id="gRegime">—</div>
-      <div class="gauge-tabs">
-        <button class="gauge-tab on" onclick="switchGauge('7d',this)">7D</button>
-        <button class="gauge-tab" onclick="switchGauge('30d',this)">30D</button>
-      </div>
-      <div class="gauge-note">UP ≤ 54 · DOWN ≥ 55 · 324-week backtest</div>
-    </div>
-    <div class="card">
-      <div class="gauge-title2" style="margin-bottom:12px">
-        <span>Signal Layers</span>
-        <span style="font-size:10px;color:var(--text3)">5 dimensions</span>
-      </div>
-      <div class="layers-wrap" id="layersWrap"></div>
+<!-- SIGNAL + HEALTH ROW -->
+<div class="row2 fu d2">
+  <div class="r2-cell">
+    <div class="cell-label">Realised Price</div>
+    <div class="cell-value" id="realisedP">—</div>
+    <div class="cell-sub">Aggregate holder cost basis</div>
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="cell-label">200-Day MA</div>
+      <div style="font-family:var(--display);font-size:24px;font-weight:600;letter-spacing:-1px" id="dma200">—</div>
+      <div class="cell-sub">Mean reversion anchor</div>
     </div>
   </div>
-
-  <!-- SIGNALS -->
-  <div class="fu d4">
-    <div class="signals-hdr">
-      <div><div class="sec-title">Signal Breakdown</div><div class="sec-sub">11 market indicators</div></div>
+  <div class="r2-cell">
+    <div class="sig-tabs2" id="sigTabs">
+      <button class="stab2 on" onclick="switchSig('7d',this)">7-Day</button>
+      <button class="stab2" onclick="switchSig('30d',this)">30-Day</button>
     </div>
-    <div class="signals-grid2" id="sigGrid"></div>
+    <div class="sig-display">
+      <div class="sig-big" id="sigBig">—</div>
+      <div class="sig-regime" id="sigRegime">—</div>
+    </div>
   </div>
-
-  <!-- HISTORY -->
-  <div class="hist-card fu d5">
-    <div class="hist-top">
-      <div class="sec-title">Historical</div>
-      <div class="chart-btns">
-        <button class="cbtn on" onclick="switchChart('fair_value_gap_pct',this)">FV Gap %</button>
-        <button class="cbtn" onclick="switchChart('btc_price',this)">BTC Price</button>
-        <button class="cbtn" onclick="switchChart('composite_7d',this)">7D Score</button>
-        <button class="cbtn" onclick="switchChart('composite_30d',this)">30D Score</button>
+  <div class="r2-cell">
+    <div class="cell-label" style="margin-bottom:14px">Directional probability</div>
+    <div class="prob-stack">
+      <div class="prob-item2">
+        <div class="prob-hdr2"><div class="prob-lbl2">7-Day</div><div class="prob-val2" id="prob7">—</div></div>
+        <div class="prob-track2"><div class="prob-fill2" id="pf7" style="width:0"></div></div>
+        <div class="prob-conf2" id="pc7">—</div>
+      </div>
+      <div class="prob-item2">
+        <div class="prob-hdr2"><div class="prob-lbl2">30-Day</div><div class="prob-val2" id="prob30">—</div></div>
+        <div class="prob-track2"><div class="prob-fill2" id="pf30" style="width:0"></div></div>
+        <div class="prob-conf2" id="pc30">—</div>
       </div>
     </div>
-    <div class="chart-area"><canvas id="hChart"></canvas></div>
   </div>
+</div>
 
-  <!-- MAGNITUDE -->
-  <div class="mag-card fu d5">
-    <div class="mag-ico" id="magIco">—</div>
-    <div class="mag-body">
-      <div class="mag-lbl">Market Magnitude</div>
-      <div class="mag-val" id="magVal">—</div>
-      <div class="mag-desc" id="magDesc">—</div>
+<!-- GAUGE + LAYERS -->
+<div class="gauge-section fu d3">
+  <div class="gauge-card2">
+    <div class="gauge-title3">
+      <span>Health Score</span>
+      <span id="gbadge2" style="font-family:var(--mono);font-size:10px;letter-spacing:1px">—</span>
     </div>
-    <div class="mag-badge" id="magBadge">—</div>
+    <div class="gauge-wrap3">
+      <canvas id="gauge" width="200" height="110"></canvas>
+      <div class="gauge-score3">
+        <div class="gauge-num3" id="gnum">—</div>
+        <div class="gauge-denom">out of 100</div>
+      </div>
+    </div>
+    <div class="gauge-regime3" id="gRegime">—</div>
+    <div class="gauge-tabs2">
+      <button class="gtab2 on" onclick="switchG('7d',this)">7D</button>
+      <button class="gtab2" onclick="switchG('30d',this)">30D</button>
+    </div>
+    <div class="gauge-note2">UP ≤ 54 · DOWN ≥ 55 · 324-week backtest</div>
   </div>
+  <div class="layers-side" id="layersSide"></div>
+</div>
 
-  <footer class="fu d6">
-    <div>BTC Health Monitor · v4 · Fair Value Framework</div>
-    <div id="footMissing">—</div>
-    <div>Backtest: UP 56.4% · DOWN 53.0% · 324 weeks</div>
-  </footer>
+<!-- SIGNALS TABLE -->
+<div class="sig-section fu d4">
+  <div class="sec-hdr">
+    <div class="sec-ttl">Signal Breakdown</div>
+    <div class="sec-sub2">11 indicators · hover for detail</div>
+  </div>
+  <table class="sig-table">
+    <thead>
+      <tr>
+        <th style="width:180px">Indicator</th>
+        <th style="width:60px">Score</th>
+        <th style="width:140px">Strength</th>
+        <th style="width:120px">Raw Value</th>
+        <th>Note</th>
+      </tr>
+    </thead>
+    <tbody id="sigTbody"></tbody>
+  </table>
+</div>
+
+<!-- HISTORY CHART -->
+<div class="hist-section fu d5">
+  <div class="hist-top2">
+    <div class="sec-ttl">Historical</div>
+    <div class="chart-btns2">
+      <button class="cbtn2 on" onclick="switchC('fair_value_gap_pct',this)">FV Gap %</button>
+      <button class="cbtn2" onclick="switchC('btc_price',this)">Price</button>
+      <button class="cbtn2" onclick="switchC('composite_7d',this)">7D Score</button>
+      <button class="cbtn2" onclick="switchC('composite_30d',this)">30D Score</button>
+    </div>
+  </div>
+  <div class="chart-area2"><canvas id="hChart"></canvas></div>
+</div>
+
+<!-- FOOTER -->
+<footer class="fu d5">
+  <div>BTC Health Monitor · v4 · Fair Value Framework</div>
+  <div id="footMiss">—</div>
+  <div>Backtest: UP 56.4% · DOWN 53.0% · 324 weeks</div>
+</footer>
 
 </div><!-- /content -->
 </div><!-- /wrap -->
 
 <script>
-const SB_URL = 'https://amrxduglanxsrdkvkbvd.supabase.co';
-const SB_KEY = 'sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
+const SB_URL='https://amrxduglanxsrdkvkbvd.supabase.co';
+const SB_KEY='sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
 
-let snap = null;
-let snapHist = [];
-let sigHorizon = '7d';
-let gaugeHorizon = '7d';
-let hChart = null;
-let chartField = 'fair_value_gap_pct';
+let snap=null, snapHist=[], sigHz='7d', gaugeHz='7d', hChart=null, chartField='fair_value_gap_pct';
 
-async function sbFetch(table, q='') {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${q}`, {
-    headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}` }
-  });
-  if (!r.ok) throw new Error(await r.text());
+async function sb(table,q=''){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${q}`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`}});
+  if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
-async function load() {
-  const btn = document.getElementById('btnRefresh');
+async function load(){
+  const btn=document.getElementById('btnR');
   btn.classList.add('spin');
-  try {
-    const [snaps, hist] = await Promise.all([
-      sbFetch('snapshots','order=created_at.desc&limit=1'),
-      sbFetch('snapshots','order=snapshot_date.asc&limit=80&select=snapshot_date,fair_value,fair_value_gap_pct,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,realised_price,dma_200')
+  try{
+    const [snaps,hist]=await Promise.all([
+      sb('snapshots','order=created_at.desc&limit=1'),
+      sb('snapshots','order=snapshot_date.asc&limit=80&select=snapshot_date,fair_value,fair_value_gap_pct,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,realised_price,dma_200')
     ]);
-    if (snaps && snaps.length) { snap = snaps[0]; snapHist = hist || []; render(); }
-  } catch(e) { console.error(e); }
+    if(snaps&&snaps.length){snap=snaps[0];snapHist=hist||[];render();}
+  }catch(e){console.error(e);}
   btn.classList.remove('spin');
 }
 
-// ── Colour helpers ────────────────────────────────────────────
-function gapColor(pct) {
-  if (pct === null || pct === undefined) return 'var(--text2)';
-  if (pct < -20) return '#00f5a0';
-  if (pct < -8)  return '#44ddaa';
-  if (pct < -2)  return '#88ccbb';
-  if (pct <= 2)  return 'var(--neutral)';
-  if (pct <= 8)  return '#ffaa55';
-  if (pct <= 20) return '#ff7744';
-  return '#ff3366';
+// ── Colours ───────────────────────────────────────────────────
+function gapCol(p){
+  if(p===null||p===undefined) return 'var(--ink2)';
+  if(p<-20) return '#1e6040';
+  if(p<-8)  return '#2a7850';
+  if(p<-2)  return '#2c5f7a';
+  if(p<=2)  return 'var(--ink2)';
+  if(p<=8)  return '#8b6914';
+  if(p<=20) return '#8b4a14';
+  return '#8b3a3a';
 }
-function scoreColor(s) {
-  if (s === null) return 'var(--text3)';
-  if (s <= 32) return 'var(--up)';
-  if (s <= 45) return '#44ddaa';
-  if (s <= 54) return 'var(--neutral)';
-  if (s <= 68) return 'var(--gold)';
-  if (s <= 80) return '#ff8833';
-  return 'var(--down)';
+function scoreCol(s){
+  if(s===null) return 'var(--ink3)';
+  if(s<=32) return '#1e6040';
+  if(s<=45) return '#2a7850';
+  if(s<=54) return '#2c5f7a';
+  if(s<=68) return '#8b6914';
+  if(s<=80) return '#8b4a14';
+  return '#8b3a3a';
 }
-function sigColor(s) {
-  if (!s || s==='NEUTRAL') return 'var(--neutral)';
-  return s==='UP' ? 'var(--up)' : 'var(--down)';
+function sigCol(s){
+  if(!s||s==='NEUTRAL') return '#2c5f7a';
+  return s==='UP' ? '#1e6040' : '#8b3a3a';
 }
-function sigClass(s) {
-  if (!s || s==='NEUTRAL') return 'neutral';
-  return s==='UP' ? 'up' : 'down';
+function fmtP(v){
+  if(!v) return '—';
+  return '$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:0});
 }
-function fmtPrice(v) {
-  if (!v) return '—';
-  return '$' + Number(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
-}
-function fmtPct(v, decimals=1) {
-  if (v === null || v === undefined) return '—';
-  return (v >= 0 ? '+' : '') + Number(v).toFixed(decimals) + '%';
+function fmtPct(v,d=1){
+  if(v===null||v===undefined) return '—';
+  return (v>=0?'+':'')+Number(v).toFixed(d)+'%';
 }
 
-const MAG_META = {
-  EXPLOSIVE: { icon:'🔥', color:'var(--down)',   desc:'High OI + extreme funding. Large moves likely. Tighten risk.' },
-  ELEVATED:  { icon:'⚡', color:'var(--gold)',    desc:'OI rising or funding elevated. Conditions heating up.' },
-  NORMAL:    { icon:'〰️', color:'var(--neutral)', desc:'Typical market conditions. Standard position sizing.' },
-  COMPRESSION:{icon:'🧊', color:'#66aaff',        desc:'OI contracting. Potential coiled spring for large move.' },
-  UNKNOWN:   { icon:'—',  color:'var(--text3)',   desc:'Insufficient derivatives data.' },
-};
-
-const SIGNALS = [
-  {k:'score_mvrv_z',    n:'MVRV Z',         rk:'mvrv_z',              rf:v=>v?.toFixed(3),           tip:'Market Value / Realised Value Z-score. Core cycle position indicator.'},
-  {k:'score_nupl',      n:'NUPL',            rk:'nupl',                rf:v=>v?.toFixed(4),           tip:'Net Unrealised Profit/Loss. Market-wide profit state.'},
-  {k:'score_sth_sopr',  n:'STH SOPR',        rk:'sth_sopr',            rf:v=>v?.toFixed(4),           tip:'Short-term holder Spent Output Profit Ratio. >1 = selling at profit.'},
-  {k:'score_lth_supply',n:'LTH Supply',      rk:'lth_supply_4w_change',rf:v=>v?v.toFixed(2)+'%':'—', tip:'Long-term holder supply 4-week change. Accumulation vs distribution.'},
-  {k:'score_puell',     n:'Puell Multiple',  rk:'puell_multiple',      rf:v=>v?.toFixed(3),           tip:'Daily miner revenue vs annual average.'},
-  {k:'score_funding_rate',n:'Funding Rate',  rk:'funding_rate_7d_avg', rf:v=>v?(v*100).toFixed(5)+'%':'—', tip:'7-day avg perpetual funding. Positive = longs paying shorts.'},
-  {k:'score_oi_change', n:'OI Change 7D',    rk:'oi_change_7d',        rf:v=>v?v.toFixed(2)+'%':'—', tip:'Open Interest 7-day % change. Rising = new money entering.'},
-  {k:'score_long_short',n:'Long/Short',      rk:'long_short_ratio',    rf:v=>v?.toFixed(3),           tip:'Global long vs short account ratio. >1.5 = crowded longs.'},
-  {k:'score_top_trader_ls',n:'Top Trader L/S',rk:'top_trader_ls_ratio',rf:v=>v?.toFixed(3),          tip:'Top trader position ratio. Strongest DOWN predictor in backtest (-0.107 corr).'},
-  {k:'score_rsi',       n:'RSI 14D',         rk:'rsi_14d',             rf:v=>v?.toFixed(1),           tip:'14-day Relative Strength Index on daily closes.'},
-  {k:'score_fear_greed',n:'Fear & Greed',    rk:'fear_greed',          rf:v=>Math.round(v),           tip:'Alternative.me index. Strongest UP predictor in backtest (+0.126 corr).'},
+const SIGS=[
+  {k:'score_mvrv_z',    n:'MVRV Z-Score',    rk:'mvrv_z',              rf:v=>v?.toFixed(3),           note:'Cycle position vs realised value'},
+  {k:'score_nupl',      n:'NUPL',             rk:'nupl',                rf:v=>v?.toFixed(4),           note:'Market-wide unrealised profit/loss'},
+  {k:'score_sth_sopr',  n:'STH SOPR',         rk:'sth_sopr',            rf:v=>v?.toFixed(4),           note:'Short-term holder realisation rate'},
+  {k:'score_lth_supply',n:'LTH Supply 4W',    rk:'lth_supply_4w_change',rf:v=>v?v.toFixed(2)+'%':'—', note:'Long-term holder accumulation/distribution'},
+  {k:'score_puell',     n:'Puell Multiple',   rk:'puell_multiple',      rf:v=>v?.toFixed(3),           note:'Miner revenue vs annual average'},
+  {k:'score_funding_rate',n:'Funding Rate',   rk:'funding_rate_7d_avg', rf:v=>v?(v*100).toFixed(5)+'%':'—', note:'7-day avg perpetual funding'},
+  {k:'score_oi_change', n:'OI Change 7D',     rk:'oi_change_7d',        rf:v=>v?v.toFixed(2)+'%':'—', note:'Open interest weekly change'},
+  {k:'score_long_short',n:'Long/Short Ratio', rk:'long_short_ratio',    rf:v=>v?.toFixed(3),           note:'Global account long vs short ratio'},
+  {k:'score_top_trader_ls',n:'Top Trader L/S',rk:'top_trader_ls_ratio', rf:v=>v?.toFixed(3),           note:'Strongest DOWN predictor (corr −0.107)'},
+  {k:'score_rsi',       n:'RSI 14-Day',       rk:'rsi_14d',             rf:v=>v?.toFixed(1),           note:'14-day relative strength index'},
+  {k:'score_fear_greed',n:'Fear & Greed',     rk:'fear_greed',          rf:v=>v?Math.round(v):'—',     note:'Strongest UP predictor (corr +0.126)'},
+];
+const LAYERS=[
+  {k:'score_valuation', n:'Valuation', icon:'◈', note:'MVRV Z + NUPL — cycle vs cost basis'},
+  {k:'score_holder',    n:'Holders',   icon:'◆', note:'STH SOPR + LTH Supply — holder behaviour'},
+  {k:'score_mining',    n:'Mining',    icon:'◉', note:'Puell Multiple — miner economics'},
+  {k:'score_derivatives',n:'Derivs',  icon:'◎', note:'Funding + OI + L/S — leverage positioning'},
+  {k:'score_sentiment', n:'Sentiment',icon:'○', note:'Fear & Greed + RSI — market mood'},
 ];
 
-const LAYERS = [
-  {k:'score_valuation',  n:'Valuation',   icon:'📊', tip:'MVRV Z + NUPL — cycle position vs realised cost basis.'},
-  {k:'score_holder',     n:'Holders',     icon:'💎', tip:'STH SOPR + LTH Supply — holder behaviour and distribution.'},
-  {k:'score_mining',     n:'Mining',      icon:'⛏️',  tip:'Puell Multiple — miner profitability and selling pressure.'},
-  {k:'score_derivatives',n:'Derivatives', icon:'📈', tip:'Funding + OI + Long/Short + Top Trader — leverage positioning.'},
-  {k:'score_sentiment',  n:'Sentiment',   icon:'🧠', tip:'Fear & Greed + RSI — market sentiment and momentum.'},
-];
+function render(){
+  const s=snap;
+  document.getElementById('loaderWrap').style.display='none';
+  document.getElementById('content').style.display='block';
 
-function render() {
-  const s = snap;
-  document.getElementById('loaderWrap').style.display = 'none';
-  document.getElementById('content').style.display = 'block';
+  document.getElementById('upd').textContent=new Date(s.created_at).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
 
-  // Header
-  const d = new Date(s.created_at);
-  document.getElementById('upd').textContent = d.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
+  // FV hero
+  const fv=s.fair_value, gap=s.fair_value_gap_pct, col=gapCol(gap);
+  document.getElementById('fvPrice').textContent=fmtP(fv);
+  document.getElementById('fvPrice').style.color=col;
+  document.getElementById('fvCurrent').textContent=fmtP(s.btc_price);
+  document.getElementById('fvCurrent').style.color=col;
+  document.getElementById('fvGap').textContent=fmtPct(gap);
+  document.getElementById('fvGap').style.color=col;
+  document.getElementById('fvGapLbl').textContent=gap!==null?(gap<0?'Discount to fair value':'Premium to fair value'):'—';
 
-  // ── FAIR VALUE HERO ───────────────────────────────────────
-  const fv  = s.fair_value;
-  const gap = s.fair_value_gap_pct;
-  const col = gapColor(gap);
+  const valEl=document.getElementById('fvVal');
+  valEl.textContent=s.valuation||'—';
+  valEl.style.background=col+'18';
+  valEl.style.color=col;
 
-  document.getElementById('fvPrice').textContent = fmtPrice(fv);
-  document.getElementById('fvPrice').style.color = col;
-  document.getElementById('fvCurrentPrice').textContent = fmtPrice(s.btc_price);
-  document.getElementById('fvCurrentPrice').style.color = col;
+  // Gap needle
+  const np=gap!==null?Math.min(100,Math.max(0,(gap+50)/100*100)):50;
+  document.getElementById('gapNeedle').style.left=np+'%';
+  document.getElementById('gapBig').textContent=fmtPct(gap);
+  document.getElementById('gapBig').style.color=col;
+  document.getElementById('gapDir').textContent=gap<0?'Trading at a discount to on-chain fair value':gap>0?'Trading at a premium to on-chain fair value':'Trading at fair value';
 
-  const valEl = document.getElementById('fvValuation');
-  valEl.textContent = s.valuation || '—';
-  valEl.style.color = col;
-  valEl.style.background = col + '11';
-  valEl.style.borderColor = col + '44';
+  // Anchors — use values from snapshot OR derive from available data
+  const anchMvrv = s.fair_value_anchor_mvrv || (s.realised_price ? Math.round(s.realised_price * 1.7) : null);
+  const anch200  = s.fair_value_anchor_200dma || s.dma_200 || null;
+  const anchPuell= s.fair_value_anchor_puell || null;
+  document.getElementById('anMvrv').textContent=fmtP(anchMvrv);
+  document.getElementById('an200').textContent=fmtP(anch200);
+  document.getElementById('anPuell').textContent=fmtP(anchPuell);
 
-  document.getElementById('fvGapPct').textContent = fmtPct(gap);
-  document.getElementById('fvGapPct').style.color = col;
-  document.getElementById('fvGapLabel').textContent = s.fv_historical_label || '—';
+  // Historical context
+  const med=s.fv_median_30d, hr=s.fv_hit_rate, dir=s.fv_direction;
+  document.getElementById('fvMedian').textContent=med!==null?fmtPct(med):'—';
+  document.getElementById('fvMedian').style.color=med>=0?'#1e6040':'#8b3a3a';
+  document.getElementById('fvHR').textContent=hr?hr+'% hit rate':'—';
+  document.getElementById('hbMedian').textContent=med!==null?fmtPct(med):'—';
+  document.getElementById('hbMedian').style.color=med>=0?'#1e6040':'#8b3a3a';
+  document.getElementById('hbHR').textContent=hr?hr+'%':'—';
+  document.getElementById('hbDir').textContent=dir||'—';
+  document.getElementById('hbDir').style.color=dir==='UP'?'#1e6040':dir==='DOWN'?'#8b3a3a':'var(--ink2)';
 
-  const med = s.fv_median_30d;
-  document.getElementById('fvMedian').textContent = med !== null ? fmtPct(med) : '—';
-  document.getElementById('fvMedian').style.color = med >= 0 ? 'var(--up)' : 'var(--down)';
-  document.getElementById('fvHitRate').textContent = s.fv_hit_rate ? s.fv_hit_rate + '% hit rate' : '—';
+  // Realised + 200DMA
+  document.getElementById('realisedP').textContent=fmtP(s.realised_price);
+  document.getElementById('dma200').textContent=fmtP(s.dma_200||anch200);
 
-  // Gap needle (maps -50% to +50% onto 0%-100% of track)
-  const needlePct = gap !== null ? Math.min(100, Math.max(0, (gap + 50) / 100 * 100)) : 50;
-  document.getElementById('gapNeedle').style.left = needlePct + '%';
-  document.getElementById('gapPct').textContent = fmtPct(gap);
-  document.getElementById('gapPct').style.color = col;
-  document.getElementById('gapSub').textContent = gap < 0 ? 'Discount to fair value' : gap > 0 ? 'Premium to fair value' : 'At fair value';
-
-  // Anchors
-  document.getElementById('anchorMvrv').textContent  = fmtPrice(s.fair_value_anchor_mvrv);
-  document.getElementById('anchor200dma').textContent = fmtPrice(s.fair_value_anchor_200dma || s.dma_200);
-  document.getElementById('anchorPuell').textContent  = fmtPrice(s.fair_value_anchor_puell);
-
-  // Realised price + 200DMA
-  document.getElementById('realisedPrice').textContent = fmtPrice(s.realised_price);
-  document.getElementById('dma200').textContent = fmtPrice(s.dma_200);
-
-  // Signal orb
-  renderOrb(sigHorizon);
-
-  // Probs
+  renderSig(sigHz);
   renderProbs();
-
-  // Gauge
-  renderGauge(gaugeHorizon);
-
-  // Layers
+  renderGauge(gaugeHz);
   renderLayers();
-
-  // Signals
-  renderSignals();
-
-  // Chart
+  renderSigTable();
   renderChart();
 
-  // Magnitude
-  renderMag();
-
-  // Footer
-  const miss = s.signals_missing;
-  document.getElementById('footMissing').textContent =
-    miss && miss.length ? '⚠ Missing: '+miss.join(', ') : '✓ All signals live';
+  const miss=s.signals_missing;
+  document.getElementById('footMiss').textContent=miss&&miss.length?'⚠ Missing: '+miss.join(', '):'✓ All signals live';
 }
 
-function renderOrb(hz) {
-  const sig    = hz==='7d' ? snap.signal_7d    : snap.signal_30d;
-  const regime = hz==='7d' ? snap.regime_7d    : snap.regime_30d;
-  const orb    = document.getElementById('sorb');
-  orb.className = 'sorb ' + sigClass(sig);
-  orb.textContent = sig || '—';
-  const reg = document.getElementById('sorbRegime');
-  reg.textContent = regime || '—';
-  reg.style.color = sigColor(sig);
+function renderSig(hz){
+  const sig=hz==='7d'?snap.signal_7d:snap.signal_30d;
+  const reg=hz==='7d'?snap.regime_7d:snap.regime_30d;
+  const col=sigCol(sig);
+  document.getElementById('sigBig').textContent=sig||'—';
+  document.getElementById('sigBig').style.color=col;
+  document.getElementById('sigRegime').textContent=reg||'—';
+  document.getElementById('sigRegime').style.color=col;
 }
 
-function renderProbs() {
-  const s = snap;
-  [[7, s.signal_7d, s.probability_7d, s.confidence_7d],
-   [30, s.signal_30d, s.probability_30d, s.confidence_30d]].forEach(([d,sig,p,c]) => {
-    const col = sigColor(sig);
-    document.getElementById('prob'+d).textContent = (p||50)+'%';
-    document.getElementById('prob'+d).style.color = col;
-    document.getElementById('pf'+d).style.width = (p||50)+'%';
-    document.getElementById('pf'+d).style.background = col;
-    document.getElementById('pc'+d).textContent = 'Confidence: '+(c||'—')+' · '+(sig||'—');
+function renderProbs(){
+  const s=snap;
+  [[7,s.signal_7d,s.probability_7d,s.confidence_7d],[30,s.signal_30d,s.probability_30d,s.confidence_30d]].forEach(([d,sig,p,c])=>{
+    const col=sigCol(sig);
+    document.getElementById('prob'+d).textContent=(p||50)+'%';
+    document.getElementById('prob'+d).style.color=col;
+    document.getElementById('pf'+d).style.width=(p||50)+'%';
+    document.getElementById('pf'+d).style.background=col;
+    document.getElementById('pc'+d).textContent='Confidence: '+(c||'—')+' · '+(sig||'—');
   });
-  const mag = snap.magnitude || 'UNKNOWN';
-  const mm = MAG_META[mag] || MAG_META.UNKNOWN;
-  document.getElementById('magSmall').textContent = mag;
-  document.getElementById('magSmall').style.color = mm.color;
-  document.getElementById('magSmallDesc').textContent = mm.desc;
 }
 
-function renderGauge(hz) {
-  const s = snap;
-  const score  = hz==='7d' ? s.composite_7d  : s.composite_30d;
-  const regime = hz==='7d' ? s.regime_7d     : s.regime_30d;
-  const sig    = hz==='7d' ? s.signal_7d     : s.signal_30d;
-  const col    = scoreColor(score);
-
-  document.getElementById('gnum').textContent = score ?? '—';
-  document.getElementById('gnum').style.color = col;
-  document.getElementById('gRegime').textContent = regime || '—';
-  document.getElementById('gRegime').style.color = col;
-
-  const badge = document.getElementById('gbadge');
-  badge.textContent = sig || '—';
-  badge.style.color = sigColor(sig);
-  badge.style.background = sigColor(sig) + '15';
-  badge.style.border = '1px solid ' + sigColor(sig) + '40';
-
-  drawGauge('gauge', score, col);
+function renderGauge(hz){
+  const s=snap;
+  const score=hz==='7d'?s.composite_7d:s.composite_30d;
+  const regime=hz==='7d'?s.regime_7d:s.regime_30d;
+  const sig=hz==='7d'?s.signal_7d:s.signal_30d;
+  const col=scoreCol(score);
+  document.getElementById('gnum').textContent=score??'—';
+  document.getElementById('gnum').style.color=col;
+  document.getElementById('gRegime').textContent=regime||'—';
+  document.getElementById('gRegime').style.color=col;
+  document.getElementById('gbadge2').textContent=(sig||'—')+' signal';
+  document.getElementById('gbadge2').style.color=sigCol(sig);
+  drawGauge('gauge',score,col);
 }
 
-function renderLayers() {
-  document.getElementById('layersWrap').innerHTML = LAYERS.map(l => {
-    const score = snap[l.k];
-    const col   = scoreColor(score);
-    const pct   = score ?? 0;
-    return `
-      <div class="layer-row-item" data-tip="${l.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
-        <div class="layer-icon2">${l.icon}</div>
-        <div class="layer-info">
-          <div class="layer-name2">${l.n}</div>
-          <div class="layer-bar-bg">
-            <div class="layer-bar-fill" style="width:${pct}%;background:${col}"></div>
-          </div>
-        </div>
-        <div class="layer-score2" style="color:${col}">${score ?? '—'}</div>
-      </div>`;
+function renderLayers(){
+  document.getElementById('layersSide').innerHTML=LAYERS.map(l=>{
+    const score=snap[l.k], col=scoreCol(score), pct=score??0;
+    return `<div class="layer-strip" data-tip="${l.note}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
+      <div class="ls-icon" style="color:${col}">${l.icon}</div>
+      <div class="ls-name">${l.n}</div>
+      <div class="ls-bar-bg"><div class="ls-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div class="ls-score" style="color:${col}">${score??'—'}</div>
+    </div>`;
   }).join('');
 }
 
-function renderSignals() {
-  document.getElementById('sigGrid').innerHTML = SIGNALS.map(sig => {
-    const score = snap[sig.k];
-    const raw   = snap[sig.rk];
-    const col   = scoreColor(score);
-    const pct   = score ?? 0;
-    return `
-      <div class="sig-chip" data-tip="${sig.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
-        <div class="chip-n">${sig.n}</div>
-        <div class="chip-s" style="color:${col}">${score ?? '—'}</div>
-        <div class="chip-track"><div class="chip-fill" style="width:${pct}%;background:${col}"></div></div>
-        <div class="chip-raw">${raw !== null && raw !== undefined ? sig.rf(raw) : '—'}</div>
-      </div>`;
+function renderSigTable(){
+  document.getElementById('sigTbody').innerHTML=SIGS.map(sig=>{
+    const score=snap[sig.k], raw=snap[sig.rk], col=scoreCol(score), pct=score??0;
+    return `<tr data-tip="${sig.note}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
+      <td class="td-name">${sig.n}</td>
+      <td class="td-score" style="color:${col}">${score??'—'}</td>
+      <td class="td-bar"><div class="td-bar-bg"><div class="td-bar-fill" style="width:${pct}%;background:${col}"></div></div></td>
+      <td class="td-raw">${raw!==null&&raw!==undefined?sig.rf(raw):'—'}</td>
+      <td class="td-tip">${sig.note}</td>
+    </tr>`;
   }).join('');
 }
 
-function renderChart() { renderChartField(chartField); }
+function renderChart(){renderChartField(chartField);}
 
-function renderChartField(field) {
-  const ctx = document.getElementById('hChart').getContext('2d');
-  if (hChart) hChart.destroy();
-
-  const labels = snapHist.map(h => h.snapshot_date);
-  const data   = snapHist.map(h => h[field]);
-
-  const colorMap = {
-    fair_value_gap_pct: '#00f5a0',
-    btc_price:          '#5a6eff',
-    composite_7d:       '#00f5a0',
-    composite_30d:      '#a040ff',
-  };
-  const labelMap = {
-    fair_value_gap_pct: 'FV Gap %',
-    btc_price:          'BTC Price',
-    composite_7d:       '7D Score',
-    composite_30d:      '30D Score',
-  };
-
-  const color = colorMap[field] || '#5a6eff';
-
-  hChart = new Chart(ctx, {
+function renderChartField(field){
+  const ctx=document.getElementById('hChart').getContext('2d');
+  if(hChart) hChart.destroy();
+  const labels=snapHist.map(h=>h.snapshot_date);
+  const data=snapHist.map(h=>h[field]);
+  const colMap={fair_value_gap_pct:'#1e6040',btc_price:'#2c5f7a',composite_7d:'#1e6040',composite_30d:'#8b6914'};
+  const lblMap={fair_value_gap_pct:'FV Gap %',btc_price:'BTC Price',composite_7d:'7D Score',composite_30d:'30D Score'};
+  const color=colMap[field]||'#1e6040';
+  hChart=new Chart(ctx,{
     type:'line',
-    data:{
-      labels,
-      datasets:[{
-        label: labelMap[field],
-        data,
-        borderColor: color,
-        borderWidth: 1.5,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        tension: 0.4,
-        fill: true,
-        backgroundColor: c2 => {
-          const g = c2.chart.ctx.createLinearGradient(0,0,0,200);
-          g.addColorStop(0, color+'28');
-          g.addColorStop(1, color+'00');
-          return g;
-        },
-      }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
+    data:{labels,datasets:[{label:lblMap[field],data,borderColor:color,borderWidth:1.5,pointRadius:0,pointHoverRadius:3,tension:0.4,fill:true,
+      backgroundColor:c=>{const g=c.chart.ctx.createLinearGradient(0,0,0,180);g.addColorStop(0,color+'22');g.addColorStop(1,color+'00');return g;}}]},
+    options:{responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{display:false},
-        tooltip:{
-          backgroundColor:'#0c1020',
-          borderColor:'rgba(90,110,255,0.25)',
-          borderWidth:1,
-          titleFont:{family:"'Syne Mono'",size:10},
-          bodyFont:{family:"'Syne Mono'",size:11},
-          callbacks:{
-            label:c2 => {
-              const v = c2.raw;
-              if (field==='btc_price') return ' $'+Number(v).toLocaleString();
-              if (field==='fair_value_gap_pct') return ' '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';
-              return ' '+v;
-            }
-          }
-        }
-      },
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:'#1a1a14',borderColor:'rgba(0,0,0,0.2)',borderWidth:1,
+          titleFont:{family:"'DM Mono'",size:10},bodyFont:{family:"'DM Mono'",size:11},
+          callbacks:{label:c2=>{const v=c2.raw;
+            if(field==='btc_price') return ' $'+Number(v).toLocaleString();
+            if(field==='fair_value_gap_pct') return ' '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';
+            return ' '+v;}}}},
       scales:{
-        x:{grid:{color:'rgba(90,110,255,0.04)'},ticks:{color:'#333660',maxTicksLimit:8,font:{family:"'Syne Mono'",size:9}}},
-        y:{
-          grid:{color:'rgba(90,110,255,0.04)'},
-          ticks:{color:'#333660',font:{family:"'Syne Mono'",size:9},
-            callback:v => field==='btc_price' ? '$'+Number(v).toLocaleString() : field==='fair_value_gap_pct' ? (v>=0?'+':'')+v+'%' : v
-          },
-          ...(field==='composite_7d'||field==='composite_30d' ? {min:0,max:100} : {}),
-        }
-      }
-    }
+        x:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{color:'var(--ink4)',maxTicksLimit:8,font:{family:"'DM Mono'",size:9}}},
+        y:{grid:{color:'rgba(0,0,0,0.04)'},
+          ticks:{color:'var(--ink4)',font:{family:"'DM Mono'",size:9},
+            callback:v=>field==='btc_price'?'$'+Number(v).toLocaleString():field==='fair_value_gap_pct'?(v>=0?'+':'')+v+'%':v},
+          ...(field==='composite_7d'||field==='composite_30d'?{min:0,max:100}:{})}}}
   });
 }
 
-function renderMag() {
-  const mag = snap.magnitude || 'UNKNOWN';
-  const mm  = MAG_META[mag] || MAG_META.UNKNOWN;
-  document.getElementById('magIco').textContent  = mm.icon;
-  document.getElementById('magVal').textContent  = mag;
-  document.getElementById('magVal').style.color  = mm.color;
-  document.getElementById('magDesc').textContent = mm.desc;
-  document.getElementById('magBadge').textContent= mag;
-  document.getElementById('magBadge').style.color= mm.color;
-}
-
-// ── Gauge ─────────────────────────────────────────────────────
-function drawGauge(id, score, color) {
-  const canvas = document.getElementById(id);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+function drawGauge(id,score,color){
+  const canvas=document.getElementById(id);if(!canvas)return;
+  const ctx=canvas.getContext('2d');
   const W=200,H=110,cx=100,cy=100,r=80;
   ctx.clearRect(0,0,W,H);
-
+  // BG
   ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,2*Math.PI);
-  ctx.strokeStyle='rgba(255,255,255,0.05)';ctx.lineWidth=9;ctx.lineCap='round';ctx.stroke();
-
-  const zones=[
-    {f:0,t:0.32,c:'rgba(0,245,160,0.4)'},
-    {f:0.32,t:0.54,c:'rgba(90,110,255,0.4)'},
-    {f:0.54,t:0.68,c:'rgba(255,204,51,0.4)'},
-    {f:0.68,t:1,c:'rgba(255,51,102,0.4)'},
-  ];
-  zones.forEach(z=>{
+  ctx.strokeStyle='var(--paper3)';ctx.lineWidth=9;ctx.lineCap='round';ctx.stroke();
+  // Zones
+  [{f:0,t:.32,c:'rgba(30,96,64,0.25)'},{f:.32,t:.54,c:'rgba(44,95,122,0.25)'},
+   {f:.54,t:.68,c:'rgba(139,105,20,0.25)'},{f:.68,t:1,c:'rgba(139,58,58,0.25)'}].forEach(z=>{
     ctx.beginPath();ctx.arc(cx,cy,r,Math.PI+z.f*Math.PI,Math.PI+z.t*Math.PI);
     ctx.strokeStyle=z.c;ctx.lineWidth=4;ctx.stroke();
   });
-
-  if (score !== null && score !== undefined) {
-    const pct = Math.min(100,Math.max(0,score))/100;
-    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,Math.PI+pct*Math.PI);
+  if(score!==null&&score!==undefined){
+    const p=Math.min(100,Math.max(0,score))/100;
+    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,Math.PI+p*Math.PI);
     ctx.strokeStyle=color;ctx.lineWidth=9;ctx.lineCap='round';ctx.stroke();
-
-    const a=Math.PI+pct*Math.PI;
+    const a=Math.PI+p*Math.PI;
     ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+(r-5)*Math.cos(a),cy+(r-5)*Math.sin(a));
     ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();
-
-    ctx.beginPath();ctx.arc(cx,cy,5,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();
+    ctx.beginPath();ctx.arc(cx,cy,4,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();
   }
 }
 
-// ── Interactions ──────────────────────────────────────────────
-function switchSig(hz, btn) {
-  sigHorizon = hz;
-  document.querySelectorAll('#sigTabs .stab').forEach(t=>t.classList.remove('on'));
-  btn.classList.add('on');
-  renderOrb(hz);
+function switchSig(hz,btn){
+  sigHz=hz;
+  document.querySelectorAll('#sigTabs .stab2').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');renderSig(hz);
 }
-function switchGauge(hz, btn) {
-  gaugeHorizon = hz;
-  document.querySelectorAll('.gauge-tab').forEach(t=>t.classList.remove('on'));
-  btn.classList.add('on');
-  renderGauge(hz);
+function switchG(hz,btn){
+  gaugeHz=hz;
+  document.querySelectorAll('.gtab2').forEach(t=>t.classList.remove('on'));
+  btn.classList.add('on');renderGauge(hz);
 }
-function switchChart(field, btn) {
-  chartField = field;
-  document.querySelectorAll('.cbtn').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
-  renderChartField(field);
+function switchC(field,btn){
+  chartField=field;
+  document.querySelectorAll('.cbtn2').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');renderChartField(field);
 }
 
-// ── Tooltip ───────────────────────────────────────────────────
-const tipEl = document.getElementById('tip');
-function showTip(e, el) {
-  const t = el.dataset.tip; if (!t) return;
-  tipEl.textContent = t; tipEl.classList.add('show');
-  moveTip(e); el.addEventListener('mousemove', moveTip);
-}
-function moveTip(e) {
-  tipEl.style.left = Math.min(e.clientX+14, window.innerWidth-250)+'px';
-  tipEl.style.top  = (e.clientY+14)+'px';
-}
-function hideTip() { tipEl.classList.remove('show'); }
+const tipEl=document.getElementById('tip');
+function showTip(e,el){const t=el.dataset.tip;if(!t)return;tipEl.textContent=t;tipEl.classList.add('show');mv(e);el.addEventListener('mousemove',mv);}
+function mv(e){tipEl.style.left=Math.min(e.clientX+14,window.innerWidth-260)+'px';tipEl.style.top=(e.clientY+14)+'px';}
+function hideTip(){tipEl.classList.remove('show');}
 
 load();
-setInterval(load, 5*60*1000);
+setInterval(load,5*60*1000);
 </script>
 </body>
 </html>
