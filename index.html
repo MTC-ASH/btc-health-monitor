@@ -4,742 +4,729 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BTC Health Monitor</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --paper:#f5f0e8;
-  --paper2:#ede8df;
-  --paper3:#e4ddd2;
-  --ink:#1a1a14;
-  --ink2:#4a4840;
-  --ink3:#8a8678;
-  --ink4:#b8b4ac;
-  --forest:#1e4030;
-  --forest2:#2a5540;
-  --forest3:#366650;
-  --forest-light:rgba(30,64,48,0.08);
-  --gold:#b8860b;
-  --gold2:#d4a017;
-  --gold-light:rgba(184,134,11,0.1);
-  --rose:#8b3a3a;
-  --rose-light:rgba(139,58,58,0.1);
-  --sky:#2c5f7a;
-  --sky-light:rgba(44,95,122,0.1);
-  --border:#d8d2c8;
-  --border2:#c8c2b8;
-  --display:'Playfair Display',serif;
-  --mono:'DM Mono',monospace;
-  --body:'DM Sans',sans-serif;
+  --bg:#f8f6f1;
+  --bg2:#f0ece4;
+  --bg3:#e8e3d9;
+  --line:#ddd8ce;
+  --line2:#c8c2b6;
+  --ink:#18160f;
+  --ink2:#4a4538;
+  --ink3:#8a8070;
+  --ink4:#b8b0a0;
+  --green:#1a4a2e;
+  --green2:#236638;
+  --green-bg:#eef5f0;
+  --green-mid:rgba(26,74,46,0.12);
+  --red:#5a1a1a;
+  --red2:#7a2424;
+  --red-bg:#f5eeee;
+  --red-mid:rgba(90,26,26,0.12);
+  --amber:#5a3a0a;
+  --amber-bg:#f5f0e8;
+  --blue:#1a3a5a;
+  --blue-bg:#eef2f5;
+  --serif:'Instrument Serif',serif;
+  --sans:'Instrument Sans',sans-serif;
+  --mono:'JetBrains Mono',monospace;
 }
-html{scroll-behavior:smooth}
-body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.6;min-height:100vh}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5}
 
-/* Subtle paper texture */
-body::before{
-  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-  opacity:1;
+/* Layout — fixed viewport, no scroll */
+.shell{
+  display:grid;
+  grid-template-rows:52px 1fr;
+  height:100vh;
+  max-width:1400px;
+  margin:0 auto;
+  padding:0 20px;
 }
 
-.wrap{max-width:1200px;margin:0 auto;padding:0 32px;position:relative;z-index:1}
-
-/* ── HEADER ── */
-header{
-  padding:28px 0 24px;
+/* ── TOP BAR ── */
+.topbar{
   display:flex;align-items:center;justify-content:space-between;
-  border-bottom:2px solid var(--ink);
-  margin-bottom:40px;
+  border-bottom:1px solid var(--line);
 }
-.logo{display:flex;align-items:baseline;gap:10px}
-.logo-name{font-family:var(--display);font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.5px}
-.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--forest3);margin-bottom:3px;align-self:center;animation:pip 3s ease-in-out infinite}
-@keyframes pip{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.7)}}
-.logo-tag{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:2px;text-transform:uppercase}
-
-.hdr-r{display:flex;align-items:center;gap:16px}
-.upd{font-family:var(--mono);font-size:11px;color:var(--ink3)}
-.btn-r{
-  display:flex;align-items:center;gap:7px;
-  padding:8px 16px;background:transparent;
-  border:1px solid var(--border2);border-radius:4px;
-  color:var(--ink2);font-family:var(--mono);font-size:11px;
-  cursor:pointer;transition:all 0.2s;letter-spacing:0.5px;
+.tb-left{display:flex;align-items:center;gap:16px}
+.logo{font-family:var(--serif);font-size:17px;color:var(--ink);letter-spacing:-0.3px}
+.logo em{font-style:italic;color:var(--ink3)}
+.divider{width:1px;height:16px;background:var(--line2)}
+.price-pill{
+  display:flex;align-items:center;gap:6px;
+  background:var(--bg2);border:1px solid var(--line);
+  border-radius:3px;padding:4px 10px;
 }
-.btn-r:hover{border-color:var(--forest);color:var(--forest);background:var(--forest-light)}
-.btn-r svg{width:12px;height:12px;transition:transform 0.5s}
-.btn-r.spin svg{animation:rot 0.8s linear infinite}
+.price-pill-val{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--ink)}
+.price-pill-label{font-size:11px;color:var(--ink3)}
+.tb-right{display:flex;align-items:center;gap:10px}
+.upd{font-family:var(--mono);font-size:10px;color:var(--ink4)}
+.btn-ref{
+  display:flex;align-items:center;gap:5px;
+  padding:5px 12px;background:transparent;border:1px solid var(--line);
+  border-radius:3px;color:var(--ink3);font-family:var(--mono);font-size:10px;
+  cursor:pointer;transition:all 0.15s;letter-spacing:0.3px;
+}
+.btn-ref:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.btn-ref svg{width:11px;height:11px}
+.btn-ref.spin svg{animation:rot 0.8s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green2);animation:pip 2.5s ease-in-out infinite}
+@keyframes pip{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* ── MAIN GRID ── */
+.main{
+  display:grid;
+  grid-template-columns:320px 1fr 300px;
+  grid-template-rows:1fr 1fr;
+  gap:1px;
+  background:var(--line);
+  padding-bottom:0;
+  overflow:hidden;
+}
+.panel{background:var(--bg);padding:20px;overflow:hidden}
+
+/* ── PANEL A: FAIR VALUE (left, full height) ── */
+.panel-fv{
+  grid-row:1 / 3;
+  display:flex;flex-direction:column;gap:0;
+  border-right:1px solid var(--line);
+}
+.panel-label{
+  font-family:var(--mono);font-size:9px;letter-spacing:2px;
+  color:var(--ink4);text-transform:uppercase;margin-bottom:10px;
+}
+
+/* Valuation temperature */
+.val-temp{
+  padding:16px;margin:-20px -20px 16px;
+  border-bottom:1px solid var(--line);
+}
+.val-word{font-family:var(--serif);font-size:28px;font-style:italic;line-height:1;margin-bottom:4px}
+.val-gap{font-family:var(--mono);font-size:28px;font-weight:500;line-height:1}
+.val-sub{font-size:11px;color:var(--ink3);margin-top:6px}
+
+/* Temperature bar */
+.temp-bar{
+  height:4px;border-radius:2px;margin:12px 0 4px;
+  background:linear-gradient(to right,var(--green),var(--green2),#888,var(--red2),var(--red));
+  position:relative;
+}
+.temp-needle{
+  position:absolute;top:-4px;width:2px;height:12px;
+  background:var(--ink);border-radius:1px;
+  transition:left 1.5s cubic-bezier(0.23,1,0.32,1);
+  box-shadow:0 1px 3px rgba(0,0,0,0.3);
+}
+.temp-labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--ink4)}
+
+/* FV anchors */
+.fv-anchors{flex:1;display:flex;flex-direction:column;gap:0}
+.anchor{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:11px 0;border-bottom:1px solid var(--line);
+}
+.anchor:last-child{border-bottom:none}
+.anchor-name{font-size:12px;color:var(--ink2)}
+.anchor-weight{font-family:var(--mono);font-size:10px;color:var(--ink4);margin-left:4px}
+.anchor-val{font-family:var(--mono);font-size:13px;font-weight:500}
+
+/* Historical context */
+.hist-ctx{
+  margin-top:auto;padding:12px;
+  background:var(--bg2);border:1px solid var(--line);border-radius:2px;
+}
+.hist-ctx-lbl{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase;margin-bottom:8px}
+.hist-ctx-row{display:flex;gap:0}
+.hcr{flex:1;text-align:center;border-right:1px solid var(--line)}
+.hcr:last-child{border-right:none}
+.hcr-v{font-family:var(--serif);font-size:20px}
+.hcr-l{font-size:10px;color:var(--ink3);margin-top:1px}
+
+/* ── PANEL B: PROBABILITY (top centre) ── */
+.panel-prob{
+  border-bottom:1px solid var(--line);
+  display:flex;flex-direction:column;justify-content:space-between;
+}
+.prob-hero{margin-bottom:12px}
+.prob-main{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+.prob-pct{font-family:var(--serif);font-size:52px;line-height:1;letter-spacing:-2px}
+.prob-dir{font-family:var(--serif);font-size:24px;font-style:italic}
+.prob-horizon{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-bottom:8px}
+.prob-confidence{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:2px;
+  font-family:var(--mono);font-size:10px;letter-spacing:0.5px;
+}
+
+/* Both horizons side by side */
+.both-horizons{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.horizon-card{
+  padding:12px;background:var(--bg2);border:1px solid var(--line);border-radius:2px;
+}
+.hz-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:6px}
+.hz-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.hz-pct{font-family:var(--mono);font-size:18px;font-weight:500}
+.hz-sig{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:0.5px}
+.hz-bar-bg{height:3px;background:var(--line);border-radius:1px;overflow:hidden;margin-bottom:4px}
+.hz-bar-fill{height:100%;border-radius:1px;transition:width 1.2s cubic-bezier(0.23,1,0.32,1)}
+.hz-conf{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+
+/* ── PANEL C: ANALYSIS (top right) ── */
+.panel-analysis{
+  border-bottom:1px solid var(--line);
+  border-left:1px solid var(--line);
+}
+.analysis-headline{
+  font-family:var(--serif);font-size:16px;font-style:italic;
+  line-height:1.4;color:var(--ink);margin-bottom:12px;
+}
+.driver-list{display:flex;flex-direction:column;gap:6px}
+.driver{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:8px;background:var(--bg2);border-radius:2px;
+  border-left:2px solid transparent;
+}
+.driver-icon{font-size:14px;min-width:18px;margin-top:1px}
+.driver-body{}
+.driver-name{font-size:11px;font-weight:600;color:var(--ink2);margin-bottom:1px}
+.driver-desc{font-size:11px;color:var(--ink3);line-height:1.4}
+
+/* ── PANEL D: HEALTH SCORES (bottom centre) ── */
+.panel-health{display:flex;flex-direction:column;gap:10px}
+.health-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.health-chip{
+  padding:10px 8px;background:var(--bg2);border:1px solid var(--line);
+  border-radius:2px;text-align:center;cursor:default;
+  transition:border-color 0.15s;
+}
+.health-chip:hover{border-color:var(--line2)}
+.hc-name{font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--ink3);text-transform:uppercase;margin-bottom:6px}
+.hc-score{font-family:var(--mono);font-size:16px;font-weight:500;margin-bottom:4px}
+.hc-bar-bg{height:2px;background:var(--line);border-radius:1px;overflow:hidden;margin-bottom:4px}
+.hc-bar-fill{height:100%;border-radius:1px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
+.hc-raw{font-size:9px;color:var(--ink4);font-family:var(--mono)}
+
+/* Composite scores */
+.composite-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.composite-card{
+  padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:2px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.cc-label{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase}
+.cc-val{font-family:var(--mono);font-size:22px;font-weight:500}
+.cc-regime{font-size:10px;color:var(--ink3);margin-top:1px}
+
+/* ── PANEL E: CHART (bottom right) ── */
+.panel-chart{
+  border-left:1px solid var(--line);
+  display:flex;flex-direction:column;gap:8px;
+}
+.chart-btns3{display:flex;gap:3px}
+.cb3{
+  padding:4px 10px;font-family:var(--mono);font-size:9px;letter-spacing:0.5px;
+  cursor:pointer;border:1px solid var(--line);background:transparent;
+  color:var(--ink3);transition:all 0.15s;border-radius:2px;
+}
+.cb3.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.cb3:not(.on):hover{border-color:var(--line2);color:var(--ink2)}
+.chart-area3{flex:1;position:relative;min-height:0}
 
 /* ── LOADER ── */
-.loader-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:12px}
-.loader-line{width:200px;height:1px;background:var(--border);position:relative;overflow:hidden}
-.loader-line::after{content:'';position:absolute;inset:0;background:var(--forest3);animation:slide 1.2s ease-in-out infinite}
+.loader-wrap{
+  position:fixed;inset:0;z-index:100;
+  background:var(--bg);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;
+}
+.loader-bar{width:160px;height:1px;background:var(--line);position:relative;overflow:hidden}
+.loader-bar::after{content:'';position:absolute;inset:0;background:var(--green);animation:slide 1.2s ease-in-out infinite}
 @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-.loader-text{font-family:var(--mono);font-size:11px;color:var(--ink3);letter-spacing:2px;text-transform:uppercase}
+.loader-txt{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:2px;text-transform:uppercase}
 
-/* ── FAIR VALUE HERO ── */
-.fv-section{
-  padding:40px 0 36px;
-  border-bottom:1px solid var(--border);
-  margin-bottom:32px;
-}
-.fv-kicker{
-  font-family:var(--mono);font-size:10px;letter-spacing:3px;
-  color:var(--ink3);text-transform:uppercase;margin-bottom:10px;
-}
-.fv-main{display:grid;grid-template-columns:1fr auto;gap:40px;align-items:start}
-.fv-left{}
-.fv-headline{
-  font-family:var(--display);font-size:58px;font-weight:700;
-  letter-spacing:-2px;line-height:1;margin-bottom:6px;
-  color:var(--ink);
-}
-.fv-valuation{
-  display:inline-block;
-  font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;
-  padding:4px 12px;border-radius:2px;margin-bottom:24px;
-}
-.fv-row{display:flex;gap:40px;margin-bottom:0}
-.fv-stat{}
-.fv-stat-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:4px}
-.fv-stat-value{font-family:var(--display);font-size:26px;font-weight:600;letter-spacing:-1px;line-height:1}
-.fv-stat-sub{font-size:11px;color:var(--ink3);margin-top:2px}
-
-.fv-right{min-width:340px}
-
-/* Gap bar */
-.gap-bar-wrap{margin-bottom:28px}
-.gap-bar-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between}
-.gap-bar-track{
-  height:6px;border-radius:1px;position:relative;overflow:hidden;
-  background:linear-gradient(to right,#1e4030,#2a5540,#b8b4ac,#b8860b,#8b3a3a);
-  margin-bottom:6px;
-}
-.gap-bar-needle{
-  position:absolute;top:-3px;width:2px;height:12px;
-  background:var(--ink);border-radius:1px;
-  box-shadow:0 0 4px rgba(0,0,0,0.3);
-  transition:left 1.5s cubic-bezier(0.23,1,0.32,1);
-}
-.gap-pct-big{font-family:var(--display);font-size:32px;font-weight:700;letter-spacing:-1.5px}
-.gap-direction{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink3);margin-top:2px}
-
-/* Anchors table */
-.anchors-table{width:100%;border-collapse:collapse}
-.anchors-table td{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
-.anchors-table tr:last-child td{border-bottom:none}
-.at-name{color:var(--ink2);font-family:var(--body)}
-.at-weight{font-family:var(--mono);font-size:10px;color:var(--ink4);text-align:right;padding-right:16px}
-.at-value{font-family:var(--mono);font-size:13px;font-weight:500;text-align:right}
-
-/* Historical context box */
-.hist-box{
-  margin-top:16px;padding:14px 16px;
-  background:var(--paper2);
-  border:1px solid var(--border);
-  border-left:3px solid var(--forest3);
-  border-radius:2px;
-}
-.hist-box-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:8px}
-.hist-box-stats{display:flex;gap:24px}
-.hbs{}
-.hbs-v{font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:-0.5px}
-.hbs-l{font-size:11px;color:var(--ink3);margin-top:1px}
-
-/* ── SIGNAL + HEALTH ROW ── */
-.row2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:32px}
-.r2-cell{background:var(--paper);padding:24px;transition:background 0.2s}
-.r2-cell:hover{background:var(--paper2)}
-.cell-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:12px}
-.cell-value{font-family:var(--display);font-size:32px;font-weight:700;letter-spacing:-1.5px;line-height:1;margin-bottom:4px}
-.cell-sub{font-size:12px;color:var(--ink3)}
-
-/* Signal display */
-.sig-display{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
-.sig-tabs2{display:flex;gap:0;border:1px solid var(--border2);border-radius:3px;overflow:hidden;margin-bottom:4px}
-.stab2{padding:5px 14px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--ink3);transition:all 0.15s}
-.stab2.on{background:var(--forest);color:#fff}
-.sig-big{font-family:var(--display);font-size:42px;font-weight:700;letter-spacing:-2px;line-height:1}
-.sig-regime{font-family:var(--mono);font-size:10px;letter-spacing:1px;margin-top:4px}
-
-/* Prob display */
-.prob-stack{display:flex;flex-direction:column;gap:12px}
-.prob-item2{}
-.prob-hdr2{display:flex;justify-content:space-between;margin-bottom:5px}
-.prob-lbl2{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink3);text-transform:uppercase}
-.prob-val2{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-0.5px}
-.prob-track2{height:3px;background:var(--paper3);border-radius:1px;overflow:hidden;margin-bottom:4px}
-.prob-fill2{height:100%;border-radius:1px;transition:width 1.4s cubic-bezier(0.23,1,0.32,1)}
-.prob-conf2{font-family:var(--mono);font-size:10px;color:var(--ink3)}
-
-/* ── HEALTH GAUGE ── */
-.gauge-section{display:grid;grid-template-columns:280px 1fr;gap:32px;margin-bottom:32px;align-items:start}
-.gauge-card2{background:var(--paper2);border:1px solid var(--border);padding:24px}
-.gauge-title3{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--ink3);text-transform:uppercase;margin-bottom:16px;display:flex;justify-content:space-between}
-.gauge-wrap3{position:relative;width:200px;height:110px;margin:0 auto 12px}
-.gauge-score3{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}
-.gauge-num3{font-family:var(--display);font-size:44px;font-weight:700;letter-spacing:-2px;line-height:1}
-.gauge-denom{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:1px}
-.gauge-regime3{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;margin:8px 0 14px}
-.gauge-tabs2{display:flex;gap:0;border:1px solid var(--border2);border-radius:3px;overflow:hidden;width:fit-content;margin:0 auto 12px}
-.gtab2{padding:4px 14px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--ink3);transition:all 0.15s}
-.gtab2.on{background:var(--forest);color:#fff}
-.gauge-note2{text-align:center;font-family:var(--mono);font-size:9px;color:var(--ink4);letter-spacing:0.5px}
-
-/* ── LAYERS ── */
-.layers-side{display:flex;flex-direction:column;gap:6px}
-.layer-strip{
-  display:flex;align-items:center;gap:12px;
-  padding:12px 16px;background:var(--paper2);
-  border:1px solid var(--border);
-  border-radius:2px;cursor:pointer;transition:all 0.15s;
-}
-.layer-strip:hover{background:var(--paper3);border-color:var(--border2)}
-.ls-icon{font-size:16px;min-width:20px}
-.ls-name{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--ink2);text-transform:uppercase;min-width:80px}
-.ls-bar-bg{flex:1;height:3px;background:var(--border);border-radius:1px;overflow:hidden}
-.ls-bar-fill{height:100%;border-radius:1px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
-.ls-score{font-family:var(--mono);font-size:13px;font-weight:500;min-width:28px;text-align:right}
-
-/* ── SIGNALS GRID ── */
-.sig-section{margin-bottom:32px}
-.sec-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
-.sec-ttl{font-family:var(--display);font-size:18px;font-weight:600;letter-spacing:-0.3px}
-.sec-sub2{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:1px}
-.sig-table{width:100%;border-collapse:collapse}
-.sig-table th{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase;padding:0 0 8px;border-bottom:1px solid var(--border);text-align:left;font-weight:400}
-.sig-table th:last-child,.sig-table td:last-child{text-align:right}
-.sig-table th:nth-child(3),.sig-table td:nth-child(3){text-align:center}
-.sig-table td{padding:10px 0;border-bottom:1px solid var(--paper3);font-size:13px;vertical-align:middle}
-.sig-table tr:last-child td{border-bottom:none}
-.sig-table tr{transition:background 0.1s;cursor:default}
-.sig-table tr:hover td{background:var(--paper2)}
-.td-name{font-family:var(--body);color:var(--ink2)}
-.td-score{font-family:var(--mono);font-size:14px;font-weight:500}
-.td-bar{width:120px}
-.td-bar-bg{height:3px;background:var(--paper3);border-radius:1px;overflow:hidden}
-.td-bar-fill{height:100%;border-radius:1px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
-.td-raw{font-family:var(--mono);font-size:11px;color:var(--ink3)}
-.td-tip{font-size:11px;color:var(--ink4);font-style:italic}
-
-/* ── HISTORY ── */
-.hist-section{margin-bottom:32px;background:var(--paper2);border:1px solid var(--border);padding:24px}
-.hist-top2{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.chart-btns2{display:flex;gap:0;border:1px solid var(--border2);border-radius:3px;overflow:hidden}
-.cbtn2{padding:5px 12px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;cursor:pointer;border:none;background:transparent;color:var(--ink3);transition:all 0.15s;border-right:1px solid var(--border2)}
-.cbtn2:last-child{border-right:none}
-.cbtn2.on{background:var(--forest);color:#fff}
-.chart-area2{position:relative;height:180px}
-
-/* ── FOOTER ── */
-footer{border-top:2px solid var(--ink);padding:20px 0;display:flex;justify-content:space-between;color:var(--ink3);font-family:var(--mono);font-size:10px;letter-spacing:0.5px;margin-top:8px}
+/* ── COLOUR HELPERS ── */
+.c-green{color:var(--green2)}
+.c-red{color:var(--red2)}
+.c-amber{color:var(--amber)}
+.c-ink{color:var(--ink2)}
 
 /* ── TOOLTIP ── */
-.tip{position:fixed;background:var(--ink);color:var(--paper);border-radius:3px;padding:8px 12px;font-family:var(--mono);font-size:11px;pointer-events:none;opacity:0;transition:opacity 0.1s;z-index:1000;max-width:240px;line-height:1.5}
+.tip{
+  position:fixed;background:var(--ink);color:var(--bg);
+  border-radius:2px;padding:7px 11px;
+  font-family:var(--mono);font-size:10px;
+  pointer-events:none;opacity:0;transition:opacity 0.1s;
+  z-index:1000;max-width:220px;line-height:1.5;
+}
 .tip.show{opacity:1}
 
-/* ── ANIMATIONS ── */
-.fu{opacity:0;transform:translateY(12px);animation:fu 0.5s ease forwards}
-@keyframes fu{to{opacity:1;transform:none}}
-.d1{animation-delay:.06s}.d2{animation-delay:.12s}.d3{animation-delay:.18s}
-.d4{animation-delay:.24s}.d5{animation-delay:.30s}
-
-::-webkit-scrollbar{width:4px}
-::-webkit-scrollbar-track{background:var(--paper)}
-::-webkit-scrollbar-thumb{background:var(--border2)}
+/* ── ENTRY ANIMATION ── */
+.fu{opacity:0;animation:fu 0.4s ease forwards}
+@keyframes fu{to{opacity:1}}
+.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.15s}
+.d4{animation-delay:.2s}.d5{animation-delay:.25s}
 </style>
 </head>
 <body>
-<div class="tip" id="tip"></div>
-<div class="wrap">
 
-<!-- HEADER -->
-<header class="fu">
-  <div class="logo">
-    <div class="logo-name">BTC Health Monitor</div>
-    <div class="logo-dot"></div>
-    <div class="logo-tag">On-chain intelligence</div>
-  </div>
-  <div class="hdr-r">
-    <div class="upd" id="upd">—</div>
-    <button class="btn-r" id="btnR" onclick="load()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-      Refresh
-    </button>
-  </div>
-</header>
-
-<!-- LOADER -->
 <div class="loader-wrap" id="loaderWrap">
-  <div class="loader-line"></div>
-  <div class="loader-text">Fetching market data</div>
+  <div class="loader-bar"></div>
+  <div class="loader-txt">Loading market data</div>
 </div>
 
-<div id="content" style="display:none">
+<div class="tip" id="tip"></div>
 
-<!-- FAIR VALUE HERO -->
-<div class="fv-section fu d1">
-  <div class="fv-kicker">On-chain composite fair value</div>
-  <div class="fv-main">
-    <div class="fv-left">
-      <div class="fv-headline" id="fvPrice">$—</div>
-      <div class="fv-valuation" id="fvVal">—</div>
-      <div class="fv-row">
-        <div class="fv-stat">
-          <div class="fv-stat-label">Current price</div>
-          <div class="fv-stat-value" id="fvCurrent">—</div>
-          <div class="fv-stat-sub">BTC/USD</div>
+<div class="shell" id="shell" style="display:none">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="tb-left">
+      <div class="logo">BTC Health <em>Monitor</em></div>
+      <div class="divider"></div>
+      <div class="price-pill">
+        <div class="price-pill-val" id="btcPrice">—</div>
+        <div class="price-pill-label">BTC/USD</div>
+      </div>
+      <div class="price-pill" id="fvPill" style="gap:4px">
+        <div class="price-pill-label">Fair value</div>
+        <div class="price-pill-val" id="fvPillVal">—</div>
+        <div class="price-pill-label" id="fvPillGap" style="font-family:var(--mono);font-size:11px">—</div>
+      </div>
+    </div>
+    <div class="tb-right">
+      <div class="live-dot"></div>
+      <div class="upd" id="upd">—</div>
+      <button class="btn-ref" id="btnR" onclick="load()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main">
+
+    <!-- PANEL A: FAIR VALUE -->
+    <div class="panel panel-fv fu d1">
+      <div class="val-temp" id="valTemp">
+        <div class="panel-label">On-chain fair value</div>
+        <div class="val-word" id="valWord">—</div>
+        <div class="val-gap" id="valGap">—</div>
+        <div class="val-sub" id="valSub">—</div>
+        <div class="temp-bar">
+          <div class="temp-needle" id="tempNeedle" style="left:50%"></div>
         </div>
-        <div class="fv-stat">
-          <div class="fv-stat-label">Gap to fair value</div>
-          <div class="fv-stat-value" id="fvGap">—</div>
-          <div class="fv-stat-sub" id="fvGapLbl">—</div>
+        <div class="temp-labels">
+          <span>Deep value</span>
+          <span>Fair</span>
+          <span>Extended</span>
         </div>
-        <div class="fv-stat">
-          <div class="fv-stat-label">Hist. 30d median</div>
-          <div class="fv-stat-value" id="fvMedian">—</div>
-          <div class="fv-stat-sub" id="fvHR">—</div>
+      </div>
+
+      <div class="panel-label" style="margin-top:14px">Fair value anchors</div>
+      <div class="fv-anchors">
+        <div class="anchor">
+          <div><div class="anchor-name">MVRV Cost Basis <span class="anchor-weight">40%</span></div><div style="font-size:10px;color:var(--ink3);margin-top:1px">Realised price × 1.7 cycle mean</div></div>
+          <div class="anchor-val" id="anMvrv">—</div>
+        </div>
+        <div class="anchor">
+          <div><div class="anchor-name">200-Day Moving Average <span class="anchor-weight">35%</span></div><div style="font-size:10px;color:var(--ink3);margin-top:1px">Long-term mean reversion anchor</div></div>
+          <div class="anchor-val" id="an200">—</div>
+        </div>
+        <div class="anchor">
+          <div><div class="anchor-name">Puell Mining Cycle <span class="anchor-weight">25%</span></div><div style="font-size:10px;color:var(--ink3);margin-top:1px">Miner-adjusted fair value</div></div>
+          <div class="anchor-val" id="anPuell">—</div>
+        </div>
+      </div>
+
+      <div class="hist-ctx">
+        <div class="hist-ctx-lbl">Historical precedent</div>
+        <div class="hist-ctx-row">
+          <div class="hcr"><div class="hcr-v" id="hcMedian">—</div><div class="hcr-l">30d median</div></div>
+          <div class="hcr"><div class="hcr-v" id="hcHR">—</div><div class="hcr-l">hit rate</div></div>
+          <div class="hcr"><div class="hcr-v" id="hcDir" style="font-size:14px;font-family:var(--mono);font-weight:500">—</div><div class="hcr-l">bias</div></div>
         </div>
       </div>
     </div>
-    <div class="fv-right">
-      <div class="gap-bar-wrap">
-        <div class="gap-bar-label">
-          <span>Deeply undervalued</span>
-          <span>Deeply overvalued</span>
+
+    <!-- PANEL B: PROBABILITY -->
+    <div class="panel panel-prob fu d2">
+      <div class="panel-label">Directional probability</div>
+      <div class="prob-hero">
+        <div class="prob-main">
+          <div class="prob-pct" id="probMain">—%</div>
+          <div class="prob-dir" id="probDir">—</div>
         </div>
-        <div class="gap-bar-track">
-          <div class="gap-bar-needle" id="gapNeedle" style="left:50%"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:4px">
-          <span style="font-family:var(--mono);font-size:9px;color:var(--ink4)">-50%</span>
-          <span style="font-family:var(--mono);font-size:9px;color:var(--ink4)">0</span>
-          <span style="font-family:var(--mono);font-size:9px;color:var(--ink4)">+50%</span>
-        </div>
-        <div style="text-align:center;margin-top:10px">
-          <div class="gap-pct-big" id="gapBig">—</div>
-          <div class="gap-direction" id="gapDir">—</div>
-        </div>
+        <div class="prob-horizon" id="probHorizonLbl">Based on 7-day health score · Backtested 324 weeks</div>
+        <div class="prob-confidence" id="probConf">—</div>
       </div>
-      <table class="anchors-table">
-        <tr>
-          <td class="at-name">MVRV Cost Basis</td>
-          <td class="at-weight">40%</td>
-          <td class="at-value" id="anMvrv">—</td>
-        </tr>
-        <tr>
-          <td class="at-name">200-Day Moving Average</td>
-          <td class="at-weight">35%</td>
-          <td class="at-value" id="an200">—</td>
-        </tr>
-        <tr>
-          <td class="at-name">Puell Mining Cycle</td>
-          <td class="at-weight">25%</td>
-          <td class="at-value" id="anPuell">—</td>
-        </tr>
-      </table>
-      <div class="hist-box">
-        <div class="hist-box-label">Historical precedent at this gap level</div>
-        <div class="hist-box-stats">
-          <div class="hbs"><div class="hbs-v" id="hbMedian">—</div><div class="hbs-l">Median 30d return</div></div>
-          <div class="hbs"><div class="hbs-v" id="hbHR">—</div><div class="hbs-l">Hit rate</div></div>
-          <div class="hbs"><div class="hbs-v" id="hbDir">—</div><div class="hbs-l">Direction bias</div></div>
+      <div class="both-horizons">
+        <div class="horizon-card">
+          <div class="hz-label">7-Day outlook</div>
+          <div class="hz-row">
+            <div class="hz-pct" id="hz7pct">—</div>
+            <div class="hz-sig" id="hz7sig">—</div>
+          </div>
+          <div class="hz-bar-bg"><div class="hz-bar-fill" id="hz7bar" style="width:0"></div></div>
+          <div class="hz-conf" id="hz7conf">—</div>
+        </div>
+        <div class="horizon-card">
+          <div class="hz-label">30-Day outlook</div>
+          <div class="hz-row">
+            <div class="hz-pct" id="hz30pct">—</div>
+            <div class="hz-sig" id="hz30sig">—</div>
+          </div>
+          <div class="hz-bar-bg"><div class="hz-bar-fill" id="hz30bar" style="width:0"></div></div>
+          <div class="hz-conf" id="hz30conf">—</div>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- SIGNAL + HEALTH ROW -->
-<div class="row2 fu d2">
-  <div class="r2-cell">
-    <div class="cell-label">Realised Price</div>
-    <div class="cell-value" id="realisedP">—</div>
-    <div class="cell-sub">Aggregate holder cost basis</div>
-    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-      <div class="cell-label">200-Day MA</div>
-      <div style="font-family:var(--display);font-size:24px;font-weight:600;letter-spacing:-1px" id="dma200">—</div>
-      <div class="cell-sub">Mean reversion anchor</div>
+    <!-- PANEL C: WHAT'S DRIVING THIS -->
+    <div class="panel panel-analysis fu d3">
+      <div class="panel-label">What's driving the signal</div>
+      <div class="analysis-headline" id="analysisLine">—</div>
+      <div class="driver-list" id="driverList"></div>
     </div>
-  </div>
-  <div class="r2-cell">
-    <div class="sig-tabs2" id="sigTabs">
-      <button class="stab2 on" onclick="switchSig('7d',this)">7-Day</button>
-      <button class="stab2" onclick="switchSig('30d',this)">30-Day</button>
+
+    <!-- PANEL D: HEALTH SCORES -->
+    <div class="panel panel-health fu d4">
+      <div class="panel-label">Signal scores <span style="color:var(--ink4);font-size:9px">· 0 = oversold · 100 = overbought</span></div>
+      <div class="health-row" id="healthRow"></div>
+      <div class="composite-row" id="compositeRow"></div>
     </div>
-    <div class="sig-display">
-      <div class="sig-big" id="sigBig">—</div>
-      <div class="sig-regime" id="sigRegime">—</div>
-    </div>
-  </div>
-  <div class="r2-cell">
-    <div class="cell-label" style="margin-bottom:14px">Directional probability</div>
-    <div class="prob-stack">
-      <div class="prob-item2">
-        <div class="prob-hdr2"><div class="prob-lbl2">7-Day</div><div class="prob-val2" id="prob7">—</div></div>
-        <div class="prob-track2"><div class="prob-fill2" id="pf7" style="width:0"></div></div>
-        <div class="prob-conf2" id="pc7">—</div>
+
+    <!-- PANEL E: CHART -->
+    <div class="panel panel-chart fu d5">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="panel-label" style="margin-bottom:0">Historical</div>
+        <div class="chart-btns3">
+          <button class="cb3 on" onclick="swC('fair_value_gap_pct',this)">FV Gap</button>
+          <button class="cb3" onclick="swC('btc_price',this)">Price</button>
+          <button class="cb3" onclick="swC('composite_7d',this)">7D</button>
+          <button class="cb3" onclick="swC('composite_30d',this)">30D</button>
+        </div>
       </div>
-      <div class="prob-item2">
-        <div class="prob-hdr2"><div class="prob-lbl2">30-Day</div><div class="prob-val2" id="prob30">—</div></div>
-        <div class="prob-track2"><div class="prob-fill2" id="pf30" style="width:0"></div></div>
-        <div class="prob-conf2" id="pc30">—</div>
-      </div>
+      <div class="chart-area3"><canvas id="hChart"></canvas></div>
     </div>
-  </div>
-</div>
 
-<!-- GAUGE + LAYERS -->
-<div class="gauge-section fu d3">
-  <div class="gauge-card2">
-    <div class="gauge-title3">
-      <span>Health Score</span>
-      <span id="gbadge2" style="font-family:var(--mono);font-size:10px;letter-spacing:1px">—</span>
-    </div>
-    <div class="gauge-wrap3">
-      <canvas id="gauge" width="200" height="110"></canvas>
-      <div class="gauge-score3">
-        <div class="gauge-num3" id="gnum">—</div>
-        <div class="gauge-denom">out of 100</div>
-      </div>
-    </div>
-    <div class="gauge-regime3" id="gRegime">—</div>
-    <div class="gauge-tabs2">
-      <button class="gtab2 on" onclick="switchG('7d',this)">7D</button>
-      <button class="gtab2" onclick="switchG('30d',this)">30D</button>
-    </div>
-    <div class="gauge-note2">UP ≤ 54 · DOWN ≥ 55 · 324-week backtest</div>
-  </div>
-  <div class="layers-side" id="layersSide"></div>
-</div>
-
-<!-- SIGNALS TABLE -->
-<div class="sig-section fu d4">
-  <div class="sec-hdr">
-    <div class="sec-ttl">Signal Breakdown</div>
-    <div class="sec-sub2">11 indicators · hover for detail</div>
-  </div>
-  <table class="sig-table">
-    <thead>
-      <tr>
-        <th style="width:180px">Indicator</th>
-        <th style="width:60px">Score</th>
-        <th style="width:140px">Strength</th>
-        <th style="width:120px">Raw Value</th>
-        <th>Note</th>
-      </tr>
-    </thead>
-    <tbody id="sigTbody"></tbody>
-  </table>
-</div>
-
-<!-- HISTORY CHART -->
-<div class="hist-section fu d5">
-  <div class="hist-top2">
-    <div class="sec-ttl">Historical</div>
-    <div class="chart-btns2">
-      <button class="cbtn2 on" onclick="switchC('fair_value_gap_pct',this)">FV Gap %</button>
-      <button class="cbtn2" onclick="switchC('btc_price',this)">Price</button>
-      <button class="cbtn2" onclick="switchC('composite_7d',this)">7D Score</button>
-      <button class="cbtn2" onclick="switchC('composite_30d',this)">30D Score</button>
-    </div>
-  </div>
-  <div class="chart-area2"><canvas id="hChart"></canvas></div>
-</div>
-
-<!-- FOOTER -->
-<footer class="fu d5">
-  <div>BTC Health Monitor · v4 · Fair Value Framework</div>
-  <div id="footMiss">—</div>
-  <div>Backtest: UP 56.4% · DOWN 53.0% · 324 weeks</div>
-</footer>
-
-</div><!-- /content -->
-</div><!-- /wrap -->
+  </div><!-- /main -->
+</div><!-- /shell -->
 
 <script>
-const SB_URL='https://amrxduglanxsrdkvkbvd.supabase.co';
-const SB_KEY='sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
+const SB='https://amrxduglanxsrdkvkbvd.supabase.co';
+const SK='sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
+let snap=null,hist=[],hChart=null,cField='fair_value_gap_pct';
 
-let snap=null, snapHist=[], sigHz='7d', gaugeHz='7d', hChart=null, chartField='fair_value_gap_pct';
-
-async function sb(table,q=''){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?${q}`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`}});
+async function sb(t,q=''){
+  const r=await fetch(`${SB}/rest/v1/${t}?${q}`,{headers:{apikey:SK,Authorization:`Bearer ${SK}`}});
   if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
 async function load(){
-  const btn=document.getElementById('btnR');
-  btn.classList.add('spin');
+  const btn=document.getElementById('btnR');btn.classList.add('spin');
   try{
-    const [snaps,hist]=await Promise.all([
+    const [s,h]=await Promise.all([
       sb('snapshots','order=created_at.desc&limit=1'),
-      sb('snapshots','order=snapshot_date.asc&limit=80&select=snapshot_date,fair_value,fair_value_gap_pct,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,realised_price,dma_200')
+      sb('snapshots','order=snapshot_date.asc&limit=80&select=snapshot_date,fair_value,fair_value_gap_pct,btc_price,composite_7d,composite_30d,realised_price,dma_200')
     ]);
-    if(snaps&&snaps.length){snap=snaps[0];snapHist=hist||[];render();}
+    if(s&&s.length){snap=s[0];hist=h||[];render();}
   }catch(e){console.error(e);}
   btn.classList.remove('spin');
 }
 
-// ── Colours ───────────────────────────────────────────────────
-function gapCol(p){
+// ── Colour ────────────────────────────────────────────────────
+function gCol(p){
   if(p===null||p===undefined) return 'var(--ink2)';
-  if(p<-20) return '#1e6040';
-  if(p<-8)  return '#2a7850';
-  if(p<-2)  return '#2c5f7a';
-  if(p<=2)  return 'var(--ink2)';
-  if(p<=8)  return '#8b6914';
-  if(p<=20) return '#8b4a14';
-  return '#8b3a3a';
+  if(p<-20) return 'var(--green)';
+  if(p<-5)  return 'var(--green2)';
+  if(p<=5)  return 'var(--ink2)';
+  if(p<=20) return 'var(--amber)';
+  return 'var(--red2)';
 }
-function scoreCol(s){
-  if(s===null) return 'var(--ink3)';
-  if(s<=32) return '#1e6040';
-  if(s<=45) return '#2a7850';
-  if(s<=54) return '#2c5f7a';
-  if(s<=68) return '#8b6914';
-  if(s<=80) return '#8b4a14';
-  return '#8b3a3a';
+function sCol(s){
+  if(s===null||s===undefined) return 'var(--ink2)';
+  if(s<=32) return 'var(--green)';
+  if(s<=45) return 'var(--green2)';
+  if(s<=54) return 'var(--blue)';
+  if(s<=68) return 'var(--amber)';
+  if(s<=80) return '#7a4010';
+  return 'var(--red2)';
 }
 function sigCol(s){
-  if(!s||s==='NEUTRAL') return '#2c5f7a';
-  return s==='UP' ? '#1e6040' : '#8b3a3a';
+  if(!s||s==='NEUTRAL') return 'var(--blue)';
+  return s==='UP'?'var(--green2)':'var(--red2)';
 }
-function fmtP(v){
-  if(!v) return '—';
-  return '$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:0});
+function sigBg(s){
+  if(!s||s==='NEUTRAL') return 'var(--blue-bg)';
+  return s==='UP'?'var(--green-bg)':'var(--red-bg)';
 }
-function fmtPct(v,d=1){
+function fP(v){return v?'$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:0}):'—'}
+function fPct(v,d=1){
   if(v===null||v===undefined) return '—';
   return (v>=0?'+':'')+Number(v).toFixed(d)+'%';
 }
 
-const SIGS=[
-  {k:'score_mvrv_z',    n:'MVRV Z-Score',    rk:'mvrv_z',              rf:v=>v?.toFixed(3),           note:'Cycle position vs realised value'},
-  {k:'score_nupl',      n:'NUPL',             rk:'nupl',                rf:v=>v?.toFixed(4),           note:'Market-wide unrealised profit/loss'},
-  {k:'score_sth_sopr',  n:'STH SOPR',         rk:'sth_sopr',            rf:v=>v?.toFixed(4),           note:'Short-term holder realisation rate'},
-  {k:'score_lth_supply',n:'LTH Supply 4W',    rk:'lth_supply_4w_change',rf:v=>v?v.toFixed(2)+'%':'—', note:'Long-term holder accumulation/distribution'},
-  {k:'score_puell',     n:'Puell Multiple',   rk:'puell_multiple',      rf:v=>v?.toFixed(3),           note:'Miner revenue vs annual average'},
-  {k:'score_funding_rate',n:'Funding Rate',   rk:'funding_rate_7d_avg', rf:v=>v?(v*100).toFixed(5)+'%':'—', note:'7-day avg perpetual funding'},
-  {k:'score_oi_change', n:'OI Change 7D',     rk:'oi_change_7d',        rf:v=>v?v.toFixed(2)+'%':'—', note:'Open interest weekly change'},
-  {k:'score_long_short',n:'Long/Short Ratio', rk:'long_short_ratio',    rf:v=>v?.toFixed(3),           note:'Global account long vs short ratio'},
-  {k:'score_top_trader_ls',n:'Top Trader L/S',rk:'top_trader_ls_ratio', rf:v=>v?.toFixed(3),           note:'Strongest DOWN predictor (corr −0.107)'},
-  {k:'score_rsi',       n:'RSI 14-Day',       rk:'rsi_14d',             rf:v=>v?.toFixed(1),           note:'14-day relative strength index'},
-  {k:'score_fear_greed',n:'Fear & Greed',     rk:'fear_greed',          rf:v=>v?Math.round(v):'—',     note:'Strongest UP predictor (corr +0.126)'},
-];
-const LAYERS=[
-  {k:'score_valuation', n:'Valuation', icon:'◈', note:'MVRV Z + NUPL — cycle vs cost basis'},
-  {k:'score_holder',    n:'Holders',   icon:'◆', note:'STH SOPR + LTH Supply — holder behaviour'},
-  {k:'score_mining',    n:'Mining',    icon:'◉', note:'Puell Multiple — miner economics'},
-  {k:'score_derivatives',n:'Derivs',  icon:'◎', note:'Funding + OI + L/S — leverage positioning'},
-  {k:'score_sentiment', n:'Sentiment',icon:'○', note:'Fear & Greed + RSI — market mood'},
-];
+// ── Analysis engine ───────────────────────────────────────────
+// Looks at signal scores and generates plain English drivers
+function buildAnalysis(s){
+  const sig7=s.signal_7d||'NEUTRAL';
+  const drivers=[];
 
+  // Check each signal against thresholds
+  const checks=[
+    {name:'Fear & Greed',score:s.score_fear_greed,raw:s.fear_greed,
+     low:'Market in fear — historically bullish contrarian signal.',
+     high:'Greed elevated — sentiment stretched, risk of reversal.',
+     unit:''},
+    {name:'Top Trader Positioning',score:s.score_top_trader_ls,raw:s.top_trader_ls_ratio,
+     low:'Pro traders net short — contrarian bullish setup.',
+     high:'Pro traders heavily long — historically precedes downside.',
+     unit:'x L/S'},
+    {name:'Funding Rate',score:s.score_funding_rate,raw:s.funding_rate_7d_avg,
+     low:'Funding negative — shorts paying, bullish for spot.',
+     high:'Funding elevated — longs overextended, likely to flush.',
+     unit:''},
+    {name:'Open Interest',score:s.score_oi_change,raw:s.oi_change_7d,
+     low:'OI contracting — leverage being reduced.',
+     high:'OI expanding — new money entering, directional risk elevated.',
+     unit:'% 7d'},
+    {name:'MVRV Z-Score',score:s.score_mvrv_z,raw:s.mvrv_z,
+     low:'On-chain valuation deeply discounted vs realised value.',
+     high:'On-chain valuation stretched vs realised value.',
+     unit:''},
+    {name:'NUPL',score:s.score_nupl,raw:s.nupl,
+     low:'Market in loss — historically strong long-term entry zone.',
+     high:'Market in significant profit — distribution risk rising.',
+     unit:''},
+    {name:'STH SOPR',score:s.score_sth_sopr,raw:s.sth_sopr,
+     low:'Short-term holders selling at loss — capitulation signal.',
+     high:'Short-term holders taking profit — near-term resistance likely.',
+     unit:''},
+  ];
+
+  for(const c of checks){
+    if(c.score===null||c.score===undefined) continue;
+    let icon,text,color;
+    if(c.score<=32){icon='↑';text=c.low;color=sig7==='UP'?'bullish':'bearish';}
+    else if(c.score>=68){icon='↓';text=c.high;color=sig7==='DOWN'?'bearish':'bullish';}
+    else continue;
+    drivers.push({name:c.name,text,color,icon});
+    if(drivers.length>=4) break;
+  }
+
+  // Headline
+  const fv_gap=s.fair_value_gap_pct;
+  let headline='';
+  if(fv_gap!==null&&fv_gap!==undefined){
+    const gapStr=fv_gap<0?`${Math.abs(fv_gap).toFixed(1)}% below fair value`:`${fv_gap.toFixed(1)}% above fair value`;
+    if(sig7==='UP'){
+      headline=`BTC is trading ${gapStr}. Conditions suggest short-term upside bias — ${drivers.length>0?'led by '+drivers[0].name.toLowerCase():''}.`;
+    } else if(sig7==='DOWN'){
+      headline=`BTC is trading ${gapStr}. Conditions suggest downside pressure — ${drivers.length>0?'driven by '+drivers[0].name.toLowerCase():''}.`;
+    } else {
+      headline=`BTC is trading ${gapStr}. No strong directional signal — market conditions are mixed.`;
+    }
+  } else {
+    headline=`No directional bias detected. Signals are mixed or data is incomplete.`;
+  }
+
+  return {headline,drivers};
+}
+
+// ── Render ────────────────────────────────────────────────────
 function render(){
   const s=snap;
   document.getElementById('loaderWrap').style.display='none';
-  document.getElementById('content').style.display='block';
+  document.getElementById('shell').style.display='';
+  document.getElementById('shell').style.display='grid';
 
   document.getElementById('upd').textContent=new Date(s.created_at).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
 
-  // FV hero
-  const fv=s.fair_value, gap=s.fair_value_gap_pct, col=gapCol(gap);
-  document.getElementById('fvPrice').textContent=fmtP(fv);
-  document.getElementById('fvPrice').style.color=col;
-  document.getElementById('fvCurrent').textContent=fmtP(s.btc_price);
-  document.getElementById('fvCurrent').style.color=col;
-  document.getElementById('fvGap').textContent=fmtPct(gap);
-  document.getElementById('fvGap').style.color=col;
-  document.getElementById('fvGapLbl').textContent=gap!==null?(gap<0?'Discount to fair value':'Premium to fair value'):'—';
+  // Top bar
+  document.getElementById('btcPrice').textContent=fP(s.btc_price);
+  const fv=s.fair_value,gap=s.fair_value_gap_pct;
+  document.getElementById('fvPillVal').textContent=fP(fv);
+  const gpct=document.getElementById('fvPillGap');
+  gpct.textContent=fmtPct2(gap);
+  gpct.style.color=gCol(gap);
 
-  const valEl=document.getElementById('fvVal');
+  // ── PANEL A: Fair Value ───────────────────────────────────
+  const valEl=document.getElementById('valWord');
+  const gapEl=document.getElementById('valGap');
+  const subEl=document.getElementById('valSub');
+  const col=gCol(gap);
+
   valEl.textContent=s.valuation||'—';
-  valEl.style.background=col+'18';
   valEl.style.color=col;
+  gapEl.textContent=fmtPct2(gap);
+  gapEl.style.color=col;
+  subEl.textContent=gap!==null?(gap<0?'BTC is trading at a discount to on-chain fair value':'BTC is trading at a premium to on-chain fair value'):'—';
 
-  // Gap needle
-  const np=gap!==null?Math.min(100,Math.max(0,(gap+50)/100*100)):50;
-  document.getElementById('gapNeedle').style.left=np+'%';
-  document.getElementById('gapBig').textContent=fmtPct(gap);
-  document.getElementById('gapBig').style.color=col;
-  document.getElementById('gapDir').textContent=gap<0?'Trading at a discount to on-chain fair value':gap>0?'Trading at a premium to on-chain fair value':'Trading at fair value';
+  // Temperature needle
+  const np=gap!==null?Math.min(96,Math.max(4,(gap+50)/100*100)):50;
+  document.getElementById('tempNeedle').style.left=np+'%';
 
-  // Anchors — use values from snapshot OR derive from available data
-  const anchMvrv = s.fair_value_anchor_mvrv || (s.realised_price ? Math.round(s.realised_price * 1.7) : null);
-  const anch200  = s.fair_value_anchor_200dma || s.dma_200 || null;
-  const anchPuell= s.fair_value_anchor_puell || null;
-  document.getElementById('anMvrv').textContent=fmtP(anchMvrv);
-  document.getElementById('an200').textContent=fmtP(anch200);
-  document.getElementById('anPuell').textContent=fmtP(anchPuell);
+  // Anchors — derive if not in DB yet
+  const anchMvrv=s.fair_value_anchor_mvrv||(s.realised_price?Math.round(s.realised_price*1.7):null);
+  const anch200=s.fair_value_anchor_200dma||s.dma_200||null;
+  const anchPuell=s.fair_value_anchor_puell||null;
+  document.getElementById('anMvrv').textContent=fP(anchMvrv);
+  document.getElementById('an200').textContent=fP(anch200);
+  document.getElementById('anPuell').textContent=fP(anchPuell);
+  [document.getElementById('anMvrv'),document.getElementById('an200'),document.getElementById('anPuell')]
+    .forEach(el=>{if(el.textContent==='—')el.style.color='var(--ink4)';});
 
   // Historical context
-  const med=s.fv_median_30d, hr=s.fv_hit_rate, dir=s.fv_direction;
-  document.getElementById('fvMedian').textContent=med!==null?fmtPct(med):'—';
-  document.getElementById('fvMedian').style.color=med>=0?'#1e6040':'#8b3a3a';
-  document.getElementById('fvHR').textContent=hr?hr+'% hit rate':'—';
-  document.getElementById('hbMedian').textContent=med!==null?fmtPct(med):'—';
-  document.getElementById('hbMedian').style.color=med>=0?'#1e6040':'#8b3a3a';
-  document.getElementById('hbHR').textContent=hr?hr+'%':'—';
-  document.getElementById('hbDir').textContent=dir||'—';
-  document.getElementById('hbDir').style.color=dir==='UP'?'#1e6040':dir==='DOWN'?'#8b3a3a':'var(--ink2)';
+  document.getElementById('hcMedian').textContent=s.fv_median_30d!==null?fmtPct2(s.fv_median_30d):'—';
+  document.getElementById('hcMedian').style.color=s.fv_median_30d>=0?'var(--green2)':'var(--red2)';
+  document.getElementById('hcHR').textContent=s.fv_hit_rate?s.fv_hit_rate+'%':'—';
+  document.getElementById('hcDir').textContent=s.fv_direction||'—';
+  document.getElementById('hcDir').style.color=s.fv_direction==='UP'?'var(--green2)':s.fv_direction==='DOWN'?'var(--red2)':'var(--ink2)';
 
-  // Realised + 200DMA
-  document.getElementById('realisedP').textContent=fmtP(s.realised_price);
-  document.getElementById('dma200').textContent=fmtP(s.dma_200||anch200);
+  // ── PANEL B: Probability ──────────────────────────────────
+  const sig7=s.signal_7d,sig30=s.signal_30d;
+  const p7=s.probability_7d||50,p30=s.probability_30d||50;
+  const c7=s.confidence_7d,c30=s.confidence_30d;
 
-  renderSig(sigHz);
-  renderProbs();
-  renderGauge(gaugeHz);
-  renderLayers();
-  renderSigTable();
-  renderChart();
+  // Hero — show the strongest signal (7d)
+  document.getElementById('probMain').textContent=p7+'%';
+  document.getElementById('probMain').style.color=sigCol(sig7);
+  document.getElementById('probDir').textContent=sig7==='UP'?'chance up':sig7==='DOWN'?'chance down':'no signal';
+  document.getElementById('probDir').style.color=sigCol(sig7);
 
-  const miss=s.signals_missing;
-  document.getElementById('footMiss').textContent=miss&&miss.length?'⚠ Missing: '+miss.join(', '):'✓ All signals live';
-}
+  const confEl=document.getElementById('probConf');
+  confEl.textContent='Confidence: '+(c7||'—');
+  confEl.style.background=sigBg(sig7);
+  confEl.style.color=sigCol(sig7);
 
-function renderSig(hz){
-  const sig=hz==='7d'?snap.signal_7d:snap.signal_30d;
-  const reg=hz==='7d'?snap.regime_7d:snap.regime_30d;
-  const col=sigCol(sig);
-  document.getElementById('sigBig').textContent=sig||'—';
-  document.getElementById('sigBig').style.color=col;
-  document.getElementById('sigRegime').textContent=reg||'—';
-  document.getElementById('sigRegime').style.color=col;
-}
-
-function renderProbs(){
-  const s=snap;
-  [[7,s.signal_7d,s.probability_7d,s.confidence_7d],[30,s.signal_30d,s.probability_30d,s.confidence_30d]].forEach(([d,sig,p,c])=>{
+  // Both horizons
+  [[7,sig7,p7,c7],[30,sig30,p30,c30]].forEach(([d,sig,p,c])=>{
     const col=sigCol(sig);
-    document.getElementById('prob'+d).textContent=(p||50)+'%';
-    document.getElementById('prob'+d).style.color=col;
-    document.getElementById('pf'+d).style.width=(p||50)+'%';
-    document.getElementById('pf'+d).style.background=col;
-    document.getElementById('pc'+d).textContent='Confidence: '+(c||'—')+' · '+(sig||'—');
+    document.getElementById('hz'+d+'pct').textContent=p+'%';
+    document.getElementById('hz'+d+'pct').style.color=col;
+    document.getElementById('hz'+d+'sig').textContent=sig||'—';
+    document.getElementById('hz'+d+'sig').style.color=col;
+    document.getElementById('hz'+d+'bar').style.width=p+'%';
+    document.getElementById('hz'+d+'bar').style.background=col;
+    document.getElementById('hz'+d+'conf').textContent='Confidence: '+(c||'—')+' · Threshold: UP≤54 / DOWN≥55';
   });
-}
 
-function renderGauge(hz){
-  const s=snap;
-  const score=hz==='7d'?s.composite_7d:s.composite_30d;
-  const regime=hz==='7d'?s.regime_7d:s.regime_30d;
-  const sig=hz==='7d'?s.signal_7d:s.signal_30d;
-  const col=scoreCol(score);
-  document.getElementById('gnum').textContent=score??'—';
-  document.getElementById('gnum').style.color=col;
-  document.getElementById('gRegime').textContent=regime||'—';
-  document.getElementById('gRegime').style.color=col;
-  document.getElementById('gbadge2').textContent=(sig||'—')+' signal';
-  document.getElementById('gbadge2').style.color=sigCol(sig);
-  drawGauge('gauge',score,col);
-}
+  // ── PANEL C: Analysis ─────────────────────────────────────
+  const {headline,drivers}=buildAnalysis(s);
+  document.getElementById('analysisLine').textContent=headline;
+  const dList=document.getElementById('driverList');
+  if(drivers.length===0){
+    dList.innerHTML=`<div class="driver" style="border-left-color:var(--line)"><div class="driver-body"><div class="driver-desc" style="color:var(--ink3)">No strong signals detected. Most indicators are in neutral territory — conditions do not favour a directional trade.</div></div></div>`;
+  } else {
+    dList.innerHTML=drivers.map(d=>{
+      const bc=d.color==='bullish'?'var(--green2)':'var(--red2)';
+      const bg=d.color==='bullish'?'var(--green-bg)':'var(--red-bg)';
+      return `<div class="driver" style="border-left-color:${bc};background:${bg}">
+        <div class="driver-icon">${d.icon}</div>
+        <div class="driver-body">
+          <div class="driver-name" style="color:${bc}">${d.name}</div>
+          <div class="driver-desc">${d.text}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
 
-function renderLayers(){
-  document.getElementById('layersSide').innerHTML=LAYERS.map(l=>{
-    const score=snap[l.k], col=scoreCol(score), pct=score??0;
-    return `<div class="layer-strip" data-tip="${l.note}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
-      <div class="ls-icon" style="color:${col}">${l.icon}</div>
-      <div class="ls-name">${l.n}</div>
-      <div class="ls-bar-bg"><div class="ls-bar-fill" style="width:${pct}%;background:${col}"></div></div>
-      <div class="ls-score" style="color:${col}">${score??'—'}</div>
+  // ── PANEL D: Health Scores ────────────────────────────────
+  const chips=[
+    {k:'score_mvrv_z',n:'MVRV Z',rk:'mvrv_z',rf:v=>v?.toFixed(2),tip:'Cycle position vs realised value'},
+    {k:'score_nupl',n:'NUPL',rk:'nupl',rf:v=>v?.toFixed(3),tip:'Market-wide profit/loss state'},
+    {k:'score_sth_sopr',n:'STH SOPR',rk:'sth_sopr',rf:v=>v?.toFixed(3),tip:'Short-term holder behaviour'},
+    {k:'score_puell',n:'Puell',rk:'puell_multiple',rf:v=>v?.toFixed(2),tip:'Miner revenue multiple'},
+    {k:'score_fear_greed',n:'F&G',rk:'fear_greed',rf:v=>v?Math.round(v):'—',tip:'Fear & Greed index — strongest UP predictor'},
+    {k:'score_funding_rate',n:'Funding',rk:'funding_rate_7d_avg',rf:v=>v?(v*100).toFixed(4)+'%':'—',tip:'7-day avg funding rate'},
+    {k:'score_oi_change',n:'OI 7D',rk:'oi_change_7d',rf:v=>v?v.toFixed(1)+'%':'—',tip:'Open interest 7-day change'},
+    {k:'score_long_short',n:'L/S',rk:'long_short_ratio',rf:v=>v?.toFixed(2),tip:'Global long/short ratio'},
+    {k:'score_top_trader_ls',n:'Top TL',rk:'top_trader_ls_ratio',rf:v=>v?.toFixed(2),tip:'Top trader L/S — strongest DOWN predictor'},
+    {k:'score_rsi',n:'RSI 14',rk:'rsi_14d',rf:v=>v?.toFixed(1),tip:'14-day RSI'},
+  ];
+  document.getElementById('healthRow').innerHTML=chips.map(c=>{
+    const sc=s[c.k],raw=s[c.rk],col=sCol(sc),pct=sc??0;
+    return `<div class="health-chip" data-tip="${c.tip}" onmouseenter="showT(event,this)" onmouseleave="hideT()">
+      <div class="hc-name">${c.n}</div>
+      <div class="hc-score" style="color:${col}">${sc??'—'}</div>
+      <div class="hc-bar-bg"><div class="hc-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div class="hc-raw">${raw!==null&&raw!==undefined?c.rf(raw):'—'}</div>
     </div>`;
   }).join('');
-}
 
-function renderSigTable(){
-  document.getElementById('sigTbody').innerHTML=SIGS.map(sig=>{
-    const score=snap[sig.k], raw=snap[sig.rk], col=scoreCol(score), pct=score??0;
-    return `<tr data-tip="${sig.note}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
-      <td class="td-name">${sig.n}</td>
-      <td class="td-score" style="color:${col}">${score??'—'}</td>
-      <td class="td-bar"><div class="td-bar-bg"><div class="td-bar-fill" style="width:${pct}%;background:${col}"></div></div></td>
-      <td class="td-raw">${raw!==null&&raw!==undefined?sig.rf(raw):'—'}</td>
-      <td class="td-tip">${sig.note}</td>
-    </tr>`;
+  // Composite
+  document.getElementById('compositeRow').innerHTML=[
+    {lbl:'7D Health Score',score:s.composite_7d,regime:s.regime_7d,sig:sig7},
+    {lbl:'30D Health Score',score:s.composite_30d,regime:s.regime_30d,sig:sig30},
+  ].map(c=>{
+    const col=sCol(c.score);
+    return `<div class="composite-card">
+      <div>
+        <div class="cc-label">${c.lbl}</div>
+        <div class="cc-regime" style="color:${col}">${c.regime||'—'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="cc-val" style="color:${col}">${c.score??'—'}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:${sigCol(c.sig)}">${c.sig||'—'}</div>
+      </div>
+    </div>`;
   }).join('');
+
+  // ── PANEL E: Chart ────────────────────────────────────────
+  drawChart();
 }
 
-function renderChart(){renderChartField(chartField);}
+function fmtPct2(v,d=1){
+  if(v===null||v===undefined) return '—';
+  return (v>=0?'+':'')+Number(v).toFixed(d)+'%';
+}
 
-function renderChartField(field){
+function drawChart(){
   const ctx=document.getElementById('hChart').getContext('2d');
   if(hChart) hChart.destroy();
-  const labels=snapHist.map(h=>h.snapshot_date);
-  const data=snapHist.map(h=>h[field]);
-  const colMap={fair_value_gap_pct:'#1e6040',btc_price:'#2c5f7a',composite_7d:'#1e6040',composite_30d:'#8b6914'};
-  const lblMap={fair_value_gap_pct:'FV Gap %',btc_price:'BTC Price',composite_7d:'7D Score',composite_30d:'30D Score'};
-  const color=colMap[field]||'#1e6040';
+  const lbl=hist.map(h=>h.snapshot_date);
+  const data=hist.map(h=>h[cField]);
+  const cm={fair_value_gap_pct:'#1a4a2e',btc_price:'#1a3a5a',composite_7d:'#1a4a2e',composite_30d:'#5a3a0a'};
+  const lm={fair_value_gap_pct:'FV Gap %',btc_price:'BTC Price',composite_7d:'7D Score',composite_30d:'30D Score'};
+  const c=cm[cField]||'#1a4a2e';
   hChart=new Chart(ctx,{
     type:'line',
-    data:{labels,datasets:[{label:lblMap[field],data,borderColor:color,borderWidth:1.5,pointRadius:0,pointHoverRadius:3,tension:0.4,fill:true,
-      backgroundColor:c=>{const g=c.chart.ctx.createLinearGradient(0,0,0,180);g.addColorStop(0,color+'22');g.addColorStop(1,color+'00');return g;}}]},
+    data:{labels:lbl,datasets:[{data,borderColor:c,borderWidth:1.5,pointRadius:0,pointHoverRadius:3,tension:0.4,fill:true,
+      backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,160);g.addColorStop(0,c+'20');g.addColorStop(1,c+'00');return g;}}]},
     options:{responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:false},
-        tooltip:{backgroundColor:'#1a1a14',borderColor:'rgba(0,0,0,0.2)',borderWidth:1,
-          titleFont:{family:"'DM Mono'",size:10},bodyFont:{family:"'DM Mono'",size:11},
-          callbacks:{label:c2=>{const v=c2.raw;
-            if(field==='btc_price') return ' $'+Number(v).toLocaleString();
-            if(field==='fair_value_gap_pct') return ' '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';
+        tooltip:{backgroundColor:'#18160f',borderColor:'rgba(0,0,0,0)',borderWidth:0,
+          titleFont:{family:"'JetBrains Mono'",size:10},bodyFont:{family:"'JetBrains Mono'",size:11},
+          callbacks:{label:x=>{const v=x.raw;
+            if(cField==='btc_price') return ' $'+Number(v).toLocaleString();
+            if(cField==='fair_value_gap_pct') return ' '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';
             return ' '+v;}}}},
       scales:{
-        x:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{color:'var(--ink4)',maxTicksLimit:8,font:{family:"'DM Mono'",size:9}}},
-        y:{grid:{color:'rgba(0,0,0,0.04)'},
-          ticks:{color:'var(--ink4)',font:{family:"'DM Mono'",size:9},
-            callback:v=>field==='btc_price'?'$'+Number(v).toLocaleString():field==='fair_value_gap_pct'?(v>=0?'+':'')+v+'%':v},
-          ...(field==='composite_7d'||field==='composite_30d'?{min:0,max:100}:{})}}}
+        x:{grid:{display:false},border:{display:false},ticks:{color:'#b8b0a0',maxTicksLimit:6,font:{family:"'JetBrains Mono'",size:9}}},
+        y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},
+          ticks:{color:'#b8b0a0',font:{family:"'JetBrains Mono'",size:9},
+            callback:v=>cField==='btc_price'?'$'+Number(v).toLocaleString():cField==='fair_value_gap_pct'?(v>=0?'+':'')+v+'%':v},
+          ...(cField==='composite_7d'||cField==='composite_30d'?{min:0,max:100}:{})}}}
   });
 }
 
-function drawGauge(id,score,color){
-  const canvas=document.getElementById(id);if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const W=200,H=110,cx=100,cy=100,r=80;
-  ctx.clearRect(0,0,W,H);
-  // BG
-  ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,2*Math.PI);
-  ctx.strokeStyle='var(--paper3)';ctx.lineWidth=9;ctx.lineCap='round';ctx.stroke();
-  // Zones
-  [{f:0,t:.32,c:'rgba(30,96,64,0.25)'},{f:.32,t:.54,c:'rgba(44,95,122,0.25)'},
-   {f:.54,t:.68,c:'rgba(139,105,20,0.25)'},{f:.68,t:1,c:'rgba(139,58,58,0.25)'}].forEach(z=>{
-    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI+z.f*Math.PI,Math.PI+z.t*Math.PI);
-    ctx.strokeStyle=z.c;ctx.lineWidth=4;ctx.stroke();
-  });
-  if(score!==null&&score!==undefined){
-    const p=Math.min(100,Math.max(0,score))/100;
-    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,Math.PI+p*Math.PI);
-    ctx.strokeStyle=color;ctx.lineWidth=9;ctx.lineCap='round';ctx.stroke();
-    const a=Math.PI+p*Math.PI;
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+(r-5)*Math.cos(a),cy+(r-5)*Math.sin(a));
-    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();
-    ctx.beginPath();ctx.arc(cx,cy,4,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();
-  }
-}
-
-function switchSig(hz,btn){
-  sigHz=hz;
-  document.querySelectorAll('#sigTabs .stab2').forEach(t=>t.classList.remove('on'));
-  btn.classList.add('on');renderSig(hz);
-}
-function switchG(hz,btn){
-  gaugeHz=hz;
-  document.querySelectorAll('.gtab2').forEach(t=>t.classList.remove('on'));
-  btn.classList.add('on');renderGauge(hz);
-}
-function switchC(field,btn){
-  chartField=field;
-  document.querySelectorAll('.cbtn2').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');renderChartField(field);
+function swC(f,btn){
+  cField=f;
+  document.querySelectorAll('.cb3').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  drawChart();
 }
 
 const tipEl=document.getElementById('tip');
-function showTip(e,el){const t=el.dataset.tip;if(!t)return;tipEl.textContent=t;tipEl.classList.add('show');mv(e);el.addEventListener('mousemove',mv);}
-function mv(e){tipEl.style.left=Math.min(e.clientX+14,window.innerWidth-260)+'px';tipEl.style.top=(e.clientY+14)+'px';}
-function hideTip(){tipEl.classList.remove('show');}
+function showT(e,el){const t=el.dataset.tip;if(!t)return;tipEl.textContent=t;tipEl.classList.add('show');mv(e);el.addEventListener('mousemove',mv);}
+function mv(e){tipEl.style.left=Math.min(e.clientX+12,window.innerWidth-240)+'px';tipEl.style.top=(e.clientY+12)+'px';}
+function hideT(){tipEl.classList.remove('show');}
 
 load();
 setInterval(load,5*60*1000);
