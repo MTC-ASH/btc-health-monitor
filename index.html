@@ -1,548 +1,1267 @@
-/**
- * BTC Health Monitor — Cloudflare Worker v3
- * Updated with empirically derived weights from backtest
- * Thresholds: UP <= 54, DOWN >= 55
- * New signals: Fear & Greed, Top Trader L/S
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Health Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Syne+Mono&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-// ── Helpers ──────────────────────────────────────────────────
-function safeNum(v, max) {
-  if (v === null || v === undefined) return null;
-  const n = parseFloat(v);
-  if (isNaN(n)) return null;
-  if (max !== undefined && Math.abs(n) > max) { console.log("Capped:", v); return null; }
-  return n;
+:root {
+  --bg:#04050d;
+  --bg2:#080a16;
+  --bg3:#0d1024;
+  --card:#0a0d1f;
+  --card2:#0f1428;
+  --border:rgba(100,120,255,0.12);
+  --border2:rgba(100,120,255,0.22);
+  --text:#e2e4ff;
+  --text2:#7c82b8;
+  --text3:#3d4270;
+  --display:'Syne',sans-serif;
+  --mono:'Syne Mono',monospace;
+  --body:'DM Sans',sans-serif;
+
+  --up:#00ffaa;
+  --up2:#00cc88;
+  --up-glow:rgba(0,255,170,0.18);
+  --down:#ff3d6e;
+  --down2:#cc2255;
+  --down-glow:rgba(255,61,110,0.18);
+  --neutral:#7b8cff;
+  --neutral-glow:rgba(123,140,255,0.18);
+  --gold:#ffcc44;
+  --gold-glow:rgba(255,204,68,0.18);
+
+  --accent1:#7b8cff;
+  --accent2:#a855f7;
+  --accent3:#00ffaa;
 }
 
-// ── Scoring functions ─────────────────────────────────────────
-// All return 0-100 where HIGH = overbought/bearish, LOW = oversold/bullish
+html{scroll-behavior:smooth}
 
-function scoreMvrvZ(z) {
-  if (z === null || z === undefined) return null;
-  if (z > 7) return 97; if (z > 5) return 88; if (z > 3) return 75;
-  if (z > 2) return 65; if (z > 1) return 55; if (z > 0) return 48;
-  if (z > -0.5) return 35; if (z > -1) return 22; return 8;
+body {
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--body);
+  font-size:14px;
+  line-height:1.6;
+  min-height:100vh;
+  overflow-x:hidden;
 }
 
-function scoreNupl(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 0.75) return 95; if (v > 0.6) return 85; if (v > 0.5) return 75;
-  if (v > 0.35) return 63; if (v > 0.25) return 55; if (v > 0.1) return 48;
-  if (v > 0) return 40; if (v > -0.1) return 30; if (v > -0.25) return 18; return 6;
+/* ── Animated background ── */
+.bg-canvas {
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  overflow:hidden;
 }
 
-function scoreSthSopr(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 1.06) return 90; if (v > 1.03) return 78; if (v > 1.01) return 65;
-  if (v >= 0.99 && v <= 1.01) return 50; if (v > 0.97) return 38; if (v > 0.94) return 24; return 10;
+.orb {
+  position:absolute;
+  border-radius:50%;
+  filter:blur(80px);
+  opacity:0.12;
+  animation:float 20s ease-in-out infinite;
+}
+.orb1{width:600px;height:600px;background:radial-gradient(circle,#7b8cff,transparent);top:-200px;left:-200px;animation-delay:0s}
+.orb2{width:400px;height:400px;background:radial-gradient(circle,#a855f7,transparent);top:40%;right:-100px;animation-delay:-7s}
+.orb3{width:500px;height:500px;background:radial-gradient(circle,#00ffaa,transparent);bottom:-200px;left:30%;animation-delay:-14s;opacity:0.06}
+
+@keyframes float{
+  0%,100%{transform:translate(0,0) scale(1)}
+  33%{transform:translate(30px,-40px) scale(1.05)}
+  66%{transform:translate(-20px,30px) scale(0.95)}
 }
 
-function scoreLthSupply(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 3) return 15; if (v > 1.5) return 28; if (v > 0.5) return 40;
-  if (v >= -0.5 && v <= 0.5) return 50; if (v > -1.5) return 62; if (v > -3) return 76; return 90;
+.grid-overlay {
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(rgba(100,120,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100,120,255,0.03) 1px, transparent 1px);
+  background-size:60px 60px;
 }
 
-function scorePuell(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 4) return 94; if (v > 3) return 84; if (v > 2) return 72;
-  if (v > 1.5) return 62; if (v > 1) return 52; if (v > 0.7) return 43;
-  if (v > 0.5) return 32; if (v > 0.3) return 20; return 8;
+/* ── Layout ── */
+.container{max-width:1200px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+
+/* ── Header ── */
+header {
+  padding:32px 0 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  margin-bottom:40px;
 }
 
-function scoreFunding(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 0.0008) return 95; if (v > 0.0005) return 85; if (v > 0.0003) return 72;
-  if (v > 0.0001) return 60; if (v >= -0.0001 && v <= 0.0001) return 50;
-  if (v > -0.0003) return 38; if (v > -0.0005) return 24; return 10;
+.logo {
+  display:flex;
+  align-items:center;
+  gap:14px;
 }
 
-function scoreOi(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 40) return 90; if (v > 25) return 78; if (v > 15) return 66;
-  if (v > 5) return 57; if (v >= -5 && v <= 5) return 50;
-  if (v > -15) return 40; if (v > -25) return 28; return 14;
+.logo-icon {
+  width:42px;height:42px;
+  border-radius:12px;
+  background:linear-gradient(135deg,var(--accent1),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;
+  position:relative;
+  overflow:hidden;
+}
+.logo-icon::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,0.2));
 }
 
-function scoreLongShort(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 3.0) return 92; if (v > 2.0) return 80; if (v > 1.5) return 68;
-  if (v > 1.2) return 58; if (v >= 0.9 && v <= 1.2) return 50;
-  if (v > 0.7) return 38; if (v > 0.5) return 24; return 12;
+.logo-text{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-0.3px}
+.logo-sub{font-size:11px;color:var(--text2);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono)}
+
+.header-right{display:flex;align-items:center;gap:16px}
+
+.refresh-btn {
+  display:flex;align-items:center;gap:8px;
+  padding:9px 18px;
+  background:var(--card2);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  color:var(--text2);
+  font-family:var(--mono);font-size:12px;
+  cursor:pointer;
+  transition:all 0.2s;
+  letter-spacing:0.5px;
+}
+.refresh-btn:hover{border-color:var(--accent1);color:var(--accent1);background:rgba(123,140,255,0.08)}
+.refresh-btn svg{width:14px;height:14px;transition:transform 0.6s}
+.refresh-btn.loading svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.live-dot {
+  width:8px;height:8px;
+  border-radius:50%;
+  background:var(--up);
+  box-shadow:0 0 8px var(--up);
+  animation:pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(0.8)}}
+
+.last-update{font-size:11px;color:var(--text3);font-family:var(--mono)}
+
+/* ── Loading ── */
+.loading-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:400px;gap:20px;
+}
+.loader{
+  width:48px;height:48px;
+  border:2px solid var(--border2);
+  border-top-color:var(--accent1);
+  border-radius:50%;
+  animation:spin 0.8s linear infinite;
+}
+.loading-text{font-family:var(--mono);font-size:13px;color:var(--text2);letter-spacing:1px}
+
+/* ── Hero section ── */
+.hero{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:16px;
+  margin-bottom:16px;
 }
 
-function scoreTopTrader(v) {
-  // Same logic as long/short — high ratio = longs dominant = bearish
-  return scoreLongShort(v);
+/* ── Price card ── */
+.price-card {
+  grid-column:1;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:28px;
+  position:relative;
+  overflow:hidden;
+  transition:border-color 0.3s;
+}
+.price-card::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at top left,rgba(123,140,255,0.06),transparent 60%);
+}
+.price-card:hover{border-color:var(--border2)}
+
+.price-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
+.price-value{font-family:var(--display);font-size:38px;font-weight:800;letter-spacing:-2px;line-height:1;margin-bottom:6px}
+.price-change{font-family:var(--mono);font-size:12px;color:var(--text2)}
+
+/* ── Signal orb ── */
+.signal-card {
+  grid-column:2;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:28px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  overflow:hidden;
+  cursor:default;
 }
 
-function scoreRsi(v) {
-  if (v === null || v === undefined) return null;
-  if (v > 80) return 93; if (v > 70) return 78; if (v > 60) return 63;
-  if (v > 50) return 54; if (v >= 45 && v <= 50) return 50;
-  if (v > 40) return 43; if (v > 30) return 32; if (v > 20) return 18; return 7;
+.orb-container{
+  position:relative;
+  width:110px;height:110px;
+  margin-bottom:16px;
 }
 
-function scoreFearGreed(v) {
-  // 0=extreme fear (bullish), 100=extreme greed (bearish)
-  // High greed = high score (overbought)
-  if (v === null || v === undefined) return null;
-  if (v >= 90) return 95; if (v >= 75) return 80; if (v >= 60) return 65;
-  if (v >= 45) return 52; if (v >= 35) return 45; if (v >= 20) return 32;
-  if (v >= 10) return 18; return 8;
+.signal-orb {
+  width:110px;height:110px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--display);font-size:13px;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;
+  position:relative;
+  transition:all 0.5s;
+}
+.signal-orb::before{
+  content:'';
+  position:absolute;inset:-8px;
+  border-radius:50%;
+  border:1px solid currentColor;
+  opacity:0.2;
+  animation:orb-ring 3s ease-in-out infinite;
+}
+.signal-orb::after{
+  content:'';
+  position:absolute;inset:-16px;
+  border-radius:50%;
+  border:1px solid currentColor;
+  opacity:0.08;
+  animation:orb-ring 3s ease-in-out infinite 0.5s;
+}
+@keyframes orb-ring{
+  0%,100%{transform:scale(1);opacity:0.15}
+  50%{transform:scale(1.08);opacity:0.08}
 }
 
-// ── Composite scoring ─────────────────────────────────────────
-// Empirically derived weights from backtest correlation analysis
-
-const WEIGHTS_7D = {
-  mvrv_z:        0.04,
-  nupl:          0.04,
-  sth_sopr:      0.08,
-  lth_supply:    0.06,
-  puell:         0.04,
-  funding:       0.25,  // strong DOWN predictor
-  oi_change:     0.10,
-  long_short:    0.08,
-  top_trader_ls: 0.15,  // strongest DOWN predictor
-  rsi:           0.07,
-  fear_greed:    0.09,  // strongest UP predictor (inverted in composite)
-};
-
-const WEIGHTS_30D = {
-  mvrv_z:        0.26,  // strongest cycle signal
-  nupl:          0.22,  // strong cycle signal
-  sth_sopr:      0.08,
-  lth_supply:    0.14,
-  puell:         0.12,
-  funding:       0.03,
-  oi_change:     0.03,
-  long_short:    0.02,
-  top_trader_ls: 0.02,
-  rsi:           0.04,
-  fear_greed:    0.04,
-};
-
-function computeComposite(scores, weights) {
-  let total = 0, wt = 0;
-  for (const k of Object.keys(weights)) {
-    if (scores[k] !== null && scores[k] !== undefined) {
-      total += scores[k] * weights[k];
-      wt += weights[k];
-    }
-  }
-  return wt === 0 ? null : Math.round(total / wt);
+.orb-up{
+  background:radial-gradient(circle at 35% 35%,rgba(0,255,170,0.3),rgba(0,255,170,0.1));
+  border:1.5px solid rgba(0,255,170,0.5);
+  color:var(--up);
+  box-shadow:0 0 40px rgba(0,255,170,0.2),inset 0 0 30px rgba(0,255,170,0.08);
+}
+.orb-down{
+  background:radial-gradient(circle at 35% 35%,rgba(255,61,110,0.3),rgba(255,61,110,0.1));
+  border:1.5px solid rgba(255,61,110,0.5);
+  color:var(--down);
+  box-shadow:0 0 40px rgba(255,61,110,0.2),inset 0 0 30px rgba(255,61,110,0.08);
+}
+.orb-neutral{
+  background:radial-gradient(circle at 35% 35%,rgba(123,140,255,0.3),rgba(123,140,255,0.1));
+  border:1.5px solid rgba(123,140,255,0.5);
+  color:var(--neutral);
+  box-shadow:0 0 40px rgba(123,140,255,0.2),inset 0 0 30px rgba(123,140,255,0.08);
 }
 
-// ── Regime + Signal ───────────────────────────────────────────
-// Thresholds from grid search: UP <= 54, DOWN >= 55
+.signal-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
+.signal-horizon{font-family:var(--display);font-size:15px;font-weight:700}
 
-function getRegime(s) {
-  if (s === null) return "Unknown";
-  if (s >= 80) return "Euphoria / Top Risk";
-  if (s >= 65) return "Overheated";
-  if (s >= 55) return "Healthy Bull";
-  if (s >= 45) return "Neutral / Ranging";
-  if (s >= 30) return "Oversold / Opportunity";
-  return "Capitulation";
+/* ── Probability card ── */
+.prob-card {
+  grid-column:3;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:28px;
+  position:relative;
+  overflow:hidden;
 }
 
-function getSignal(s) {
-  if (s === null) return "NEUTRAL";
-  if (s >= 55) return "DOWN";   // empirically derived threshold
-  if (s <= 54) return "UP";     // empirically derived threshold
-  return "NEUTRAL";
+.prob-row{
+  display:flex;
+  flex-direction:column;
+  gap:18px;
 }
 
-// Probability based on score distance from thresholds
-// Calibrated from backtest: UP base 56.4%, DOWN base 53.0%
-function getProbability(s, signal) {
-  if (s === null || signal === "NEUTRAL") return 50;
-  if (signal === "UP") {
-    // Score 54 = ~56%, score 30 = ~75%, score 0 = ~85%
-    const base = 56;
-    const extra = Math.round((54 - s) * 0.5);
-    return Math.min(85, base + extra);
-  }
-  if (signal === "DOWN") {
-    // Score 55 = ~53%, score 75 = ~65%, score 100 = ~78%
-    const base = 53;
-    const extra = Math.round((s - 55) * 0.5);
-    return Math.min(78, base + extra);
-  }
-  return 50;
+.prob-item{}
+.prob-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:8px;
+}
+.prob-horizon{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase}
+.prob-pct{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-1px}
+.prob-bar-bg{height:5px;background:rgba(255,255,255,0.06);border-radius:10px;overflow:hidden}
+.prob-bar{height:100%;border-radius:10px;transition:width 1.2s cubic-bezier(0.23,1,0.32,1)}
+.prob-conf{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:5px}
+
+/* ── Score gauge ── */
+.gauge-section{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  margin-bottom:16px;
 }
 
-function getConfidence(s, signal, missingCount) {
-  if (signal === "NEUTRAL") return "LOW";
-  const prob = getProbability(s, signal);
-  const penalty = missingCount * 5;
-  const adjusted = prob - penalty;
-  if (adjusted >= 70) return "HIGH";
-  if (adjusted >= 60) return "MEDIUM";
-  return "LOW";
+.gauge-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:28px;
+  position:relative;
+  overflow:hidden;
+  transition:border-color 0.3s,transform 0.2s;
+  cursor:pointer;
+}
+.gauge-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.gauge-card::before{
+  content:'';position:absolute;inset:0;
+  opacity:0;
+  transition:opacity 0.3s;
+}
+.gauge-card:hover::before{opacity:1}
+
+.gauge-title{
+  font-family:var(--mono);font-size:10px;letter-spacing:2px;
+  color:var(--text3);text-transform:uppercase;margin-bottom:20px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.gauge-badge{
+  font-size:10px;padding:3px 10px;border-radius:20px;
+  font-family:var(--mono);letter-spacing:0.5px;
 }
 
-function getMagnitude(oiChange, funding) {
-  if (oiChange === null || funding === null) return "UNKNOWN";
-  const absFunding = Math.abs(funding);
-  if (oiChange < -20) return "COMPRESSION";
-  if (oiChange > 25 && absFunding > 0.0005) return "EXPLOSIVE";
-  if (oiChange > 15 || absFunding > 0.0003) return "ELEVATED";
-  return "NORMAL";
+.gauge-wrap{position:relative;width:180px;height:100px;margin:0 auto 16px}
+canvas.gauge-canvas{display:block}
+
+.gauge-score{
+  position:absolute;
+  bottom:0;left:50%;transform:translateX(-50%);
+  text-align:center;
+}
+.gauge-num{font-family:var(--display);font-size:36px;font-weight:800;letter-spacing:-2px;line-height:1}
+.gauge-label{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1px;margin-top:2px}
+
+.gauge-regime{
+  text-align:center;
+  font-family:var(--display);font-size:13px;font-weight:600;margin-bottom:16px;
 }
 
-// ── Data fetching — Newhedge ──────────────────────────────────
-const NH_BASE = "https://newhedge.io/api/v2/metrics";
+/* ── Horizon tabs ── */
+.tab-group{
+  display:flex;gap:6px;
+  background:rgba(255,255,255,0.03);
+  border-radius:12px;padding:4px;
+  margin-bottom:20px;
+}
+.tab{
+  flex:1;padding:7px;border-radius:8px;
+  font-family:var(--mono);font-size:11px;letter-spacing:0.5px;
+  text-align:center;cursor:pointer;
+  border:none;background:transparent;color:var(--text3);
+  transition:all 0.2s;
+}
+.tab.active{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
+.tab:not(.active):hover{color:var(--text2)}
 
-async function fetchNewhedge(slug, metric, apiKey) {
-  const url = `${NH_BASE}/${slug}/${metric}?api_token=${apiKey}`;
-  try {
-    const res = await fetch(url, { headers: { "Accept": "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (Array.isArray(data) && data.length > 0) {
-      const last = data[data.length - 1];
-      if (Array.isArray(last)) return last[1];
-      if (last[metric] !== undefined) return last[metric];
-      if (last.value !== undefined) return last.value;
-      const numKey = Object.keys(last).find(k => k !== 'date' && k !== 'time' && !isNaN(parseFloat(last[k])));
-      return numKey ? last[numKey] : null;
-    }
-    return null;
-  } catch (e) {
-    console.log(`Newhedge ${slug}/${metric} failed:`, e.message);
-    return { error: e.message };
-  }
+/* ── Signals grid ── */
+.signals-section{margin-bottom:16px}
+
+.signals-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:16px;
+}
+.section-title{
+  font-family:var(--display);font-size:16px;font-weight:700;
+  letter-spacing:-0.3px;
+}
+.section-sub{font-size:12px;color:var(--text2)}
+
+.signals-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
 }
 
-// ── Data fetching — Binance ───────────────────────────────────
-async function fetchFunding() {
-  try {
-    const res = await fetch("https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=21");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return { error: "No data" };
-    return data.reduce((s, d) => s + parseFloat(d.fundingRate), 0) / data.length;
-  } catch (e) { return { error: e.message }; }
+@media(max-width:900px){.signals-grid{grid-template-columns:repeat(2,1fr)}}
+
+.signal-chip {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:16px;
+  cursor:pointer;
+  transition:all 0.2s;
+  position:relative;
+  overflow:hidden;
+}
+.signal-chip::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;height:2px;
+  border-radius:2px 2px 0 0;
+  transition:opacity 0.3s;
+}
+.signal-chip:hover{transform:translateY(-2px);border-color:var(--border2)}
+.signal-chip.active-chip{border-color:var(--border2)}
+
+.chip-name{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
+.chip-value{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px}
+.chip-bar-bg{height:3px;background:rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;margin-bottom:8px}
+.chip-bar{height:100%;border-radius:10px;transition:width 1s cubic-bezier(0.23,1,0.32,1)}
+.chip-raw{font-size:11px;color:var(--text3);font-family:var(--mono)}
+
+/* ── History chart ── */
+.history-section{margin-bottom:16px}
+
+.history-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:28px;
 }
 
-async function fetchOI() {
-  try {
-    const res = await fetch("https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1d&limit=8");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length < 2) return { error: "Insufficient data" };
-    const oldest = parseFloat(data[0].sumOpenInterestValue);
-    const newest = parseFloat(data[data.length - 1].sumOpenInterestValue);
-    if (oldest === 0) return { error: "Zero OI" };
-    return ((newest - oldest) / oldest) * 100;
-  } catch (e) { return { error: e.message }; }
+.chart-controls{
+  display:flex;gap:6px;
+  background:rgba(255,255,255,0.03);
+  border-radius:10px;padding:4px;
+  width:fit-content;
+}
+.chart-btn{
+  padding:6px 14px;border-radius:7px;
+  font-family:var(--mono);font-size:11px;letter-spacing:0.5px;
+  cursor:pointer;border:none;background:transparent;color:var(--text3);
+  transition:all 0.2s;
+}
+.chart-btn.active{background:var(--card2);color:var(--text);border:1px solid var(--border2)}
+.chart-btn:not(.active):hover{color:var(--text2)}
+
+.chart-wrap{position:relative;height:220px;margin-top:20px}
+
+/* ── Layers ── */
+.layers-section{margin-bottom:16px}
+
+.layers-grid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+}
+@media(max-width:900px){.layers-grid{grid-template-columns:repeat(2,1fr)}}
+
+.layer-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:18px 14px;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.25s;
+  position:relative;
+  overflow:hidden;
+}
+.layer-card:hover{transform:translateY(-3px)}
+
+.layer-icon{font-size:22px;margin-bottom:10px}
+.layer-name{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px}
+.layer-score-wrap{position:relative;width:56px;height:56px;margin:0 auto 8px}
+.layer-num{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--display);font-size:18px;font-weight:800;
 }
 
-async function fetchLongShort() {
-  try {
-    const res = await fetch("https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1h&limit=1");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return { error: "No data" };
-    return parseFloat(data[0].longShortRatio);
-  } catch (e) { return { error: e.message }; }
+/* ── Magnitude ── */
+.magnitude-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:24px 28px;
+  margin-bottom:16px;
+  display:flex;
+  align-items:center;
+  gap:24px;
+  cursor:pointer;
+  transition:all 0.2s;
+}
+.magnitude-card:hover{border-color:var(--border2)}
+.mag-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:4px}
+.mag-value{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-0.5px}
+.mag-desc{font-size:12px;color:var(--text2);max-width:500px}
+.mag-icon{font-size:32px}
+
+/* ── Stats row ── */
+.stats-row{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  margin-bottom:16px;
 }
 
-async function fetchTopTrader() {
-  try {
-    const res = await fetch("https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=BTCUSDT&period=1h&limit=1");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) return { error: "No data" };
-    return parseFloat(data[0].longShortRatio);
-  } catch (e) { return { error: e.message }; }
+.stat-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:20px;
+  transition:all 0.2s;
+  cursor:default;
+}
+.stat-card:hover{border-color:var(--border2)}
+.stat-label{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:8px}
+.stat-value{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-1px}
+.stat-sub{font-size:11px;color:var(--text2);margin-top:4px}
+
+/* ── Footer ── */
+footer{
+  border-top:1px solid var(--border);
+  padding:24px 0;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  color:var(--text3);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:0.5px;
+  margin-top:16px;
 }
 
-async function fetchBtcPrice() {
-  try {
-    const res = await fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return parseFloat(data.markPrice);
-  } catch (e) { return { error: e.message }; }
+/* ── Tooltip ── */
+.tooltip{
+  position:fixed;
+  background:var(--card2);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:10px 14px;
+  font-family:var(--mono);font-size:11px;color:var(--text);
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 0.15s;
+  z-index:1000;
+  max-width:220px;
+  line-height:1.6;
 }
+.tooltip.show{opacity:1}
 
-// ── Data fetching — Fear & Greed ──────────────────────────────
-async function fetchFearGreed() {
-  try {
-    const res = await fetch("https://api.alternative.me/fng/?limit=1");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return parseFloat(data.data[0].value);
-  } catch (e) { return { error: e.message }; }
+/* ── Colour helpers ── */
+.c-up{color:var(--up)}
+.c-down{color:var(--down)}
+.c-neutral{color:var(--neutral)}
+.c-gold{color:var(--gold)}
+
+/* ── Animated entry ── */
+.fade-up{
+  opacity:0;
+  transform:translateY(16px);
+  animation:fadeUp 0.5s ease forwards;
 }
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
 
-// ── Supabase helpers ──────────────────────────────────────────
-async function sbInsert(url, key, table, row) {
-  const res = await fetch(`${url}/rest/v1/${table}`, {
-    method: "POST",
-    headers: { "Content-Type":"application/json", "apikey":key, "Authorization":`Bearer ${key}`, "Prefer":"return=representation" },
-    body: JSON.stringify(row),
+.delay-1{animation-delay:0.05s}
+.delay-2{animation-delay:0.1s}
+.delay-3{animation-delay:0.15s}
+.delay-4{animation-delay:0.2s}
+.delay-5{animation-delay:0.25s}
+.delay-6{animation-delay:0.3s}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
+
+</style>
+</head>
+<body>
+
+<div class="bg-canvas">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+</div>
+<div class="grid-overlay"></div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="container">
+
+  <!-- Header -->
+  <header class="fade-up">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-text">BTC Health Monitor</div>
+        <div class="logo-sub">Market Intelligence</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-dot" id="liveDot"></div>
+      <div class="last-update" id="lastUpdate">—</div>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+          <path d="M21 3v5h-5"/>
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+          <path d="M8 16H3v5"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Loading state -->
+  <div class="loading-state" id="loadingState">
+    <div class="loader"></div>
+    <div class="loading-text">Fetching market data...</div>
+  </div>
+
+  <!-- Main content -->
+  <div id="mainContent" style="display:none">
+
+    <!-- Hero row -->
+    <div class="hero fade-up delay-1">
+
+      <!-- Price -->
+      <div class="price-card">
+        <div class="price-label">Bitcoin Price</div>
+        <div class="price-value" id="heroPrice">—</div>
+        <div class="price-change" id="heroDate">—</div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <div class="price-label" style="margin-bottom:6px">7D Magnitude</div>
+          <div id="heroMagnitude" style="font-family:var(--display);font-size:15px;font-weight:700">—</div>
+        </div>
+      </div>
+
+      <!-- Signal orb -->
+      <div class="signal-card">
+        <div style="width:100%;margin-bottom:16px">
+          <div class="tab-group" id="signalTabs">
+            <button class="tab active" data-horizon="7d" onclick="switchHorizon('7d',this)">7D</button>
+            <button class="tab" data-horizon="30d" onclick="switchHorizon('30d',this)">30D</button>
+          </div>
+        </div>
+        <div class="orb-container">
+          <div class="signal-orb orb-neutral" id="signalOrb">—</div>
+        </div>
+        <div class="signal-label">Signal</div>
+        <div class="signal-horizon" id="signalRegime">—</div>
+      </div>
+
+      <!-- Probability -->
+      <div class="prob-card">
+        <div class="price-label" style="margin-bottom:20px">Probability</div>
+        <div class="prob-row">
+          <div class="prob-item">
+            <div class="prob-header">
+              <div class="prob-horizon">7-Day Outlook</div>
+              <div class="prob-pct" id="prob7d">—</div>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar" id="probBar7d" style="width:0%"></div>
+            </div>
+            <div class="prob-conf" id="conf7d">Confidence: —</div>
+          </div>
+          <div class="prob-item">
+            <div class="prob-header">
+              <div class="prob-horizon">30-Day Outlook</div>
+              <div class="prob-pct" id="prob30d">—</div>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar" id="probBar30d" style="width:0%"></div>
+            </div>
+            <div class="prob-conf" id="conf30d">Confidence: —</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Gauge row -->
+    <div class="gauge-section fade-up delay-2">
+      <div class="gauge-card" id="gauge7dCard">
+        <div class="gauge-title">
+          <span>7-Day Composite</span>
+          <span class="gauge-badge" id="badge7d">—</span>
+        </div>
+        <div class="gauge-wrap">
+          <canvas class="gauge-canvas" id="gauge7d" width="180" height="100"></canvas>
+          <div class="gauge-score">
+            <div class="gauge-num" id="gaugeNum7d">—</div>
+            <div class="gauge-label">/ 100</div>
+          </div>
+        </div>
+        <div class="gauge-regime" id="regime7d">—</div>
+        <div class="tab-group">
+          <button class="tab active" onclick="switchGaugeHorizon('7d',this,event)">7D</button>
+          <button class="tab" onclick="switchGaugeHorizon('30d',this,event)">30D</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);text-align:center;font-family:var(--mono)">
+          UP ≤ 54 · DOWN ≥ 55 · Empirically derived
+        </div>
+      </div>
+
+      <div class="gauge-card">
+        <div class="gauge-title">
+          <span>Signal Layers</span>
+          <span style="font-size:11px;color:var(--text3)">5 dimensions</span>
+        </div>
+        <div class="layers-grid" style="grid-template-columns:repeat(5,1fr);" id="layersGrid">
+          <!-- populated by JS -->
+        </div>
+        <div style="margin-top:16px;font-size:11px;color:var(--text3);font-family:var(--mono);text-align:center">
+          Hover each layer for details
+        </div>
+      </div>
+    </div>
+
+    <!-- Signals grid -->
+    <div class="signals-section fade-up delay-3">
+      <div class="signals-header">
+        <div>
+          <div class="section-title">Signal Breakdown</div>
+          <div class="section-sub">All 11 market indicators</div>
+        </div>
+      </div>
+      <div class="signals-grid" id="signalsGrid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="history-section fade-up delay-4">
+      <div class="history-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div class="section-title">Historical Scores</div>
+          <div class="chart-controls">
+            <button class="chart-btn active" onclick="switchChart('composite_7d',this)">7D Score</button>
+            <button class="chart-btn" onclick="switchChart('composite_30d',this)">30D Score</button>
+            <button class="chart-btn" onclick="switchChart('btc_price',this)">BTC Price</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="stats-row fade-up delay-5" id="statsRow">
+      <!-- populated by JS -->
+    </div>
+
+    <!-- Footer -->
+    <footer class="fade-up delay-6">
+      <div>BTC Health Monitor · v3.0 · Empirical model</div>
+      <div id="footerMissing">—</div>
+      <div>UP 56.4% · DOWN 53.0% · Backtested 324 weeks</div>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://amrxduglanxsrdkvkbvd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
+
+// ── State ─────────────────────────────────────────────────────
+let snapshot = null;
+let history  = [];
+let horizon  = '7d';
+let historyChart = null;
+let currentChartField = 'composite_7d';
+
+// ── Fetch ─────────────────────────────────────────────────────
+async function sb(table, query='') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    headers:{ apikey: SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}` }
   });
-  if (!res.ok) throw new Error(`Supabase insert failed: ${await res.text()}`);
+  if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-async function sbSelect(url, key, table, query) {
-  const res = await fetch(`${url}/rest/v1/${table}?${query}`, {
-    headers: { "apikey":key, "Authorization":`Bearer ${key}` },
-  });
-  if (!res.ok) throw new Error(`Supabase select failed: ${await res.text()}`);
-  return res.json();
-}
-
-async function sbUpdate(url, key, table, match, updates) {
-  const res = await fetch(`${url}/rest/v1/${table}?${match}`, {
-    method: "PATCH",
-    headers: { "Content-Type":"application/json", "apikey":key, "Authorization":`Bearer ${key}`, "Prefer":"return=minimal" },
-    body: JSON.stringify(updates),
-  });
-  if (!res.ok) throw new Error(`Supabase update failed: ${await res.text()}`);
-}
-
-// ── LTH supply 4-week change ──────────────────────────────────
-async function getLthChange(supabaseUrl, supabaseKey, current) {
+async function loadData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('loading');
   try {
-    const d = new Date(); d.setDate(d.getDate() - 28);
-    const rows = await sbSelect(supabaseUrl, supabaseKey, "snapshots",
-      `snapshot_date=lte.${d.toISOString().split("T")[0]}&order=snapshot_date.desc&limit=1&select=lth_supply`);
-    if (!rows || rows.length === 0 || !rows[0].lth_supply) return null;
-    const old = parseFloat(rows[0].lth_supply);
-    return old === 0 ? null : ((current - old) / old) * 100;
-  } catch (e) { console.log("LTH change error:", e.message); return null; }
-}
-
-// ── Resolve prior predictions ─────────────────────────────────
-async function resolvePredictions(supabaseUrl, supabaseKey, currentPrice, now) {
-  try {
-    const outcomes = await sbSelect(supabaseUrl, supabaseKey, "prediction_outcomes",
-      "select=*&or=(correct_7d.is.null,correct_14d.is.null,correct_30d.is.null)&order=snapshot_date.asc&limit=50");
-    if (!outcomes || outcomes.length === 0) return;
-    const threshold = 0.03;
-    for (const o of outcomes) {
-      const days = Math.floor((now - new Date(o.snapshot_date)) / 86400000);
-      const updates = {};
-      for (const [d, field, signal] of [[7,"7d",o.signal_7d],[14,"14d",o.signal_14d],[30,"30d",o.signal_30d]]) {
-        if (o[`correct_${field}`] !== null || days < d) continue;
-        const pct = (currentPrice - o.price_at_prediction) / o.price_at_prediction;
-        updates[`price_${field}`] = currentPrice;
-        updates[`pct_change_${field}`] = parseFloat((pct * 100).toFixed(4));
-        updates[`resolved_${field}_at`] = new Date().toISOString();
-        if (Math.abs(pct) < threshold) updates[`correct_${field}`] = null;
-        else if (signal === "UP") updates[`correct_${field}`] = pct >= threshold;
-        else if (signal === "DOWN") updates[`correct_${field}`] = pct <= -threshold;
-        else updates[`correct_${field}`] = Math.abs(pct) < threshold;
-      }
-      if (Object.keys(updates).length > 0) {
-        await sbUpdate(supabaseUrl, supabaseKey, "prediction_outcomes", `id=eq.${o.id}`, updates);
-      }
+    const [snaps, hist] = await Promise.all([
+      sb('snapshots','order=created_at.desc&limit=1'),
+      sb('snapshots','order=snapshot_date.asc&limit=60&select=snapshot_date,composite_7d,composite_30d,btc_price,signal_7d,signal_30d,probability_7d,probability_30d')
+    ]);
+    if (snaps && snaps.length) {
+      snapshot = snaps[0];
+      history  = hist || [];
+      render();
     }
-  } catch (e) { console.log("Resolution error:", e.message); }
+  } catch(e) {
+    console.error(e);
+  }
+  btn.classList.remove('loading');
 }
 
-// ── Main snapshot function ────────────────────────────────────
-async function runSnapshot(env) {
-  const NH  = env.NEWHEDGE_API_KEY;
-  const SU  = env.SUPABASE_URL;
-  const SK  = env.SUPABASE_KEY;
-  const now = new Date();
-  const snapshotDate = now.toISOString().split("T")[0];
-  const missing = [], errors = [];
+// ── Colours ───────────────────────────────────────────────────
+function scoreColor(s) {
+  if (s === null) return 'var(--text3)';
+  if (s <= 32) return 'var(--up)';
+  if (s <= 45) return '#66ddbb';
+  if (s <= 54) return 'var(--neutral)';
+  if (s <= 68) return 'var(--gold)';
+  if (s <= 80) return '#ff8844';
+  return 'var(--down)';
+}
 
-  // Fetch all signals in parallel
-  const [mvrvZ, nupl, sthSopr, lthRaw, puell, rsi,
-         btcPrice, funding, oi, longShort, topTrader, fearGreed] = await Promise.all([
-    fetchNewhedge("mvrv-z-score", "mvrv_z", NH),
-    fetchNewhedge("net-unrealized-profit-loss", "net_unrealized_profit_loss", NH),
-    fetchNewhedge("short-term-holder-sopr", "sopr_sth", NH),
-    fetchNewhedge("long-term-holder-supply", "supply_lth", NH),
-    fetchNewhedge("puell-multiple", "puell_multiple", NH),
-    fetchNewhedge("bitcoin-rsi", "rsi_14d", NH),
-    fetchBtcPrice(),
-    fetchFunding(),
-    fetchOI(),
-    fetchLongShort(),
-    fetchTopTrader(),
-    fetchFearGreed(),
-  ]);
+function signalColor(sig) {
+  if (!sig || sig==='NEUTRAL') return 'var(--neutral)';
+  if (sig==='UP') return 'var(--up)';
+  return 'var(--down)';
+}
 
-  function proc(name, raw, max) {
-    if (raw === null || raw === undefined) { missing.push(name); return null; }
-    if (typeof raw === "object" && raw.error) { missing.push(name); errors.push(`${name}: ${raw.error}`); return null; }
-    return safeNum(parseFloat(raw), max);
+function signalClass(sig) {
+  if (!sig || sig==='NEUTRAL') return 'orb-neutral';
+  if (sig==='UP') return 'orb-up';
+  return 'orb-down';
+}
+
+function magnitudeColor(m) {
+  if (!m) return 'var(--text2)';
+  const map={EXPLOSIVE:'var(--down)',ELEVATED:'var(--gold)',NORMAL:'var(--neutral)',COMPRESSION:'#66aaff',UNKNOWN:'var(--text3)'};
+  return map[m] || 'var(--text2)';
+}
+
+function magnitudeIcon(m) {
+  const map={EXPLOSIVE:'🔥',ELEVATED:'⚡',NORMAL:'〰️',COMPRESSION:'🧊',UNKNOWN:'—'};
+  return map[m] || '—';
+}
+
+function magnitudeDesc(m) {
+  const map={
+    EXPLOSIVE:'High OI growth + extreme funding — expect large moves, tighten risk.',
+    ELEVATED:'OI rising or funding elevated — conditions heating up.',
+    NORMAL:'Typical market conditions. Standard position sizing.',
+    COMPRESSION:'OI contracting — potential spring loading for a big move.',
+    UNKNOWN:'Insufficient derivatives data to assess magnitude.'
+  };
+  return map[m] || '';
+}
+
+// ── Format ────────────────────────────────────────────────────
+function fmt(v, decimals=2, prefix='') {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'number') return prefix + v.toFixed(decimals);
+  return String(v);
+}
+
+function fmtPrice(v) {
+  if (!v) return '—';
+  return '$' + Number(v).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+// ── Signal definitions ────────────────────────────────────────
+const SIGNALS = [
+  {key:'score_mvrv_z',   name:'MVRV Z',       rawKey:'mvrv_z',           rawFmt:v=>fmt(v,3),   tip:'Market Value / Realised Value Z-score. High = overvalued vs cost basis.'},
+  {key:'score_nupl',     name:'NUPL',          rawKey:'nupl',             rawFmt:v=>fmt(v,4),   tip:'Net Unrealised Profit/Loss. Measures market-wide profit state.'},
+  {key:'score_sth_sopr', name:'STH SOPR',      rawKey:'sth_sopr',         rawFmt:v=>fmt(v,4),   tip:'Short-term holder Spent Output Profit Ratio. >1 = selling at profit.'},
+  {key:'score_lth_supply',name:'LTH Supply',   rawKey:'lth_supply_4w_change',rawFmt:v=>v?fmt(v,2)+'%':'—', tip:'Long-term holder supply 4-week change. Accumulation vs distribution.'},
+  {key:'score_puell',    name:'Puell Multiple',rawKey:'puell_multiple',   rawFmt:v=>fmt(v,3),   tip:'Daily miner revenue vs annual average. High = miners selling pressure.'},
+  {key:'score_funding_rate',name:'Funding Rate',rawKey:'funding_rate_7d_avg',rawFmt:v=>v?(v*100).toFixed(5)+'%':'—', tip:'7-day avg perpetual funding rate. Positive = longs paying shorts.'},
+  {key:'score_oi_change',name:'OI Change',     rawKey:'oi_change_7d',     rawFmt:v=>v?fmt(v,2)+'%':'—',  tip:'Open Interest 7-day % change. Rising OI = new money entering market.'},
+  {key:'score_long_short',name:'Long/Short',   rawKey:'long_short_ratio', rawFmt:v=>fmt(v,3),   tip:'Global long vs short account ratio. >1.5 = crowded longs.'},
+  {key:'score_top_trader_ls',name:'Top Trader L/S',rawKey:'top_trader_ls_ratio',rawFmt:v=>fmt(v,3), tip:'Top trader position ratio. Strongest DOWN predictor in backtest.'},
+  {key:'score_rsi',      name:'RSI 14D',       rawKey:'rsi_14d',          rawFmt:v=>fmt(v,1),   tip:'14-day Relative Strength Index on daily closes.'},
+  {key:'score_fear_greed',name:'Fear & Greed', rawKey:'fear_greed',       rawFmt:v=>Math.round(v), tip:'Alternative.me Fear & Greed Index. Strongest UP predictor in backtest.'},
+];
+
+const LAYERS = [
+  {key:'score_valuation', name:'Valuation', icon:'📊', tip:'MVRV Z + NUPL — cycle positioning vs realised cost basis.'},
+  {key:'score_holder',    name:'Holders',   icon:'💎', tip:'STH SOPR + LTH Supply — holder behaviour and distribution.'},
+  {key:'score_mining',    name:'Mining',    icon:'⛏️', tip:'Puell Multiple — miner profitability and selling pressure.'},
+  {key:'score_derivatives',name:'Deriv.',  icon:'📈', tip:'Funding + OI + Long/Short + Top Trader — leverage and positioning.'},
+  {key:'score_sentiment', name:'Sentiment',icon:'🧠', tip:'Fear & Greed + RSI — market sentiment and momentum.'},
+];
+
+// ── Gauge drawing ─────────────────────────────────────────────
+function drawGauge(canvasId, score, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W=180,H=100,cx=90,cy=95,r=72;
+  ctx.clearRect(0,0,W,H);
+
+  const startAngle = Math.PI;
+  const endAngle   = 2*Math.PI;
+
+  // Background arc
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,startAngle,endAngle);
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  ctx.lineWidth=8;
+  ctx.lineCap='round';
+  ctx.stroke();
+
+  // Score zones (coloured segments)
+  const zones=[
+    {from:0,to:0.32,color:'rgba(0,255,170,0.5)'},
+    {from:0.32,to:0.54,color:'rgba(123,140,255,0.5)'},
+    {from:0.54,to:0.68,color:'rgba(255,204,68,0.5)'},
+    {from:0.68,to:1,color:'rgba(255,61,110,0.5)'},
+  ];
+  zones.forEach(z=>{
+    const a1=startAngle + z.from*Math.PI;
+    const a2=startAngle + z.to*Math.PI;
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,a1,a2);
+    ctx.strokeStyle=z.color;
+    ctx.lineWidth=4;
+    ctx.stroke();
+  });
+
+  if (score !== null && score !== undefined) {
+    // Fill arc
+    const pct = Math.min(100,Math.max(0,score)) / 100;
+    const fillEnd = startAngle + pct*Math.PI;
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,startAngle,fillEnd);
+    ctx.strokeStyle=color;
+    ctx.lineWidth=8;
+    ctx.lineCap='round';
+    ctx.stroke();
+
+    // Needle
+    const angle = startAngle + pct*Math.PI;
+    const nx = cx + (r-4)*Math.cos(angle);
+    const ny = cy + (r-4)*Math.sin(angle);
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.lineTo(nx,ny);
+    ctx.strokeStyle=color;
+    ctx.lineWidth=2;
+    ctx.lineCap='round';
+    ctx.stroke();
+
+    // Centre dot
+    ctx.beginPath();
+    ctx.arc(cx,cy,4,0,2*Math.PI);
+    ctx.fillStyle=color;
+    ctx.fill();
   }
+}
 
-  const v = {
-    mvrv_z:    proc("mvrv_z", mvrvZ, 100),
-    nupl:      proc("nupl", nupl, 10000),
-    sth_sopr:  proc("sth_sopr", sthSopr, 100),
-    lth:       proc("lth_supply", lthRaw, 100000000),
-    puell:     proc("puell", puell, 1000),
-    rsi:       proc("rsi", rsi, 1000),
-    btc:       proc("btc_price", btcPrice, 10000000),
-    funding:   proc("funding_rate", funding, 1),
-    oi:        proc("oi_change", oi, 10000),
-    longShort: proc("long_short", longShort, 1000),
-    topTrader: proc("top_trader_ls", topTrader, 1000),
-    fearGreed: proc("fear_greed", fearGreed, 100),
-  };
-
-  // NUPL is returned as percentage — convert to decimal
-  if (v.nupl !== null) v.nupl = v.nupl / 100;
-
-  console.log("Raw values:", JSON.stringify(v));
-
-  const lthChange = v.lth !== null ? await getLthChange(SU, SK, v.lth) : null;
-
-  // Score each signal
-  const sc = {
-    mvrv_z:        scoreMvrvZ(v.mvrv_z),
-    nupl:          scoreNupl(v.nupl),
-    sth_sopr:      scoreSthSopr(v.sth_sopr),
-    lth_supply:    scoreLthSupply(lthChange),
-    puell:         scorePuell(v.puell),
-    funding:       scoreFunding(v.funding),
-    oi_change:     scoreOi(v.oi),
-    long_short:    scoreLongShort(v.longShort),
-    top_trader_ls: scoreTopTrader(v.topTrader),
-    rsi:           scoreRsi(v.rsi),
-    fear_greed:    scoreFearGreed(v.fearGreed),
-  };
-
-  console.log("Signal scores:", JSON.stringify(sc));
-
-  // Layer averages
-  function avg(...keys) {
-    const valid = keys.map(k => sc[k]).filter(x => x !== null && x !== undefined);
-    return valid.length ? Math.round(valid.reduce((a,b) => a+b,0)/valid.length) : null;
+// ── Layer donut ───────────────────────────────────────────────
+function drawLayerDonut(canvasId, score, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cx=28,cy=28,r=22;
+  ctx.clearRect(0,0,56,56);
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,0,2*Math.PI);
+  ctx.strokeStyle='rgba(255,255,255,0.06)';
+  ctx.lineWidth=5;
+  ctx.stroke();
+  if (score !== null && score !== undefined) {
+    const pct = Math.min(100,Math.max(0,score))/100;
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+pct*2*Math.PI);
+    ctx.strokeStyle=color;
+    ctx.lineWidth=5;
+    ctx.lineCap='round';
+    ctx.stroke();
   }
+}
 
-  const layers = {
-    valuation:   avg("mvrv_z","nupl"),
-    holder:      avg("sth_sopr","lth_supply"),
-    mining:      avg("puell"),
-    derivatives: avg("funding","oi_change","long_short","top_trader_ls"),
-    sentiment:   avg("fear_greed","rsi"),
-  };
+// ── Render ────────────────────────────────────────────────────
+function render() {
+  if (!snapshot) return;
+  const s = snapshot;
 
-  // Composite scores
-  const c7d  = computeComposite(sc, WEIGHTS_7D);
-  const c30d = computeComposite(sc, WEIGHTS_30D);
+  document.getElementById('loadingState').style.display='none';
+  document.getElementById('mainContent').style.display='block';
 
-  // Signals with empirical thresholds
-  const sig7d  = getSignal(c7d);
-  const sig30d = getSignal(c30d);
+  // Last update
+  const d = new Date(s.created_at);
+  document.getElementById('lastUpdate').textContent = d.toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'});
 
-  // Probabilities calibrated from backtest
-  const prob7d  = getProbability(c7d,  sig7d);
-  const prob30d = getProbability(c30d, sig30d);
-
-  // Confidence
-  const conf7d  = getConfidence(c7d,  sig7d,  missing.length);
-  const conf30d = getConfidence(c30d, sig30d, missing.length);
+  // Price
+  document.getElementById('heroPrice').textContent = fmtPrice(s.btc_price);
+  document.getElementById('heroDate').textContent = s.snapshot_date;
 
   // Magnitude
-  const magnitude = getMagnitude(v.oi, v.funding);
+  const mag = s.magnitude || 'UNKNOWN';
+  document.getElementById('heroMagnitude').textContent = magnitudeIcon(mag)+' '+mag;
+  document.getElementById('heroMagnitude').style.color = magnitudeColor(mag);
 
-  console.log("Composites:", JSON.stringify({ c7d, c30d, sig7d, sig30d, prob7d, prob30d }));
+  // Signal orb
+  renderOrb(horizon);
 
-  // Resolve prior predictions
-  if (v.btc) await resolvePredictions(SU, SK, v.btc, now);
+  // Probabilities
+  renderProbs();
 
-  // Build snapshot row
-  const row = {
-    snapshot_date:        snapshotDate,
-    btc_price:            v.btc,
-    mvrv_z:               v.mvrv_z,
-    nupl:                 v.nupl,
-    sth_sopr:             v.sth_sopr,
-    lth_supply:           v.lth,
-    lth_supply_4w_change: lthChange,
-    puell_multiple:       v.puell,
-    funding_rate_7d_avg:  v.funding,
-    oi_change_7d:         v.oi,
-    long_short_ratio:     v.longShort,
-    rsi_14d:              v.rsi,
-    // New fields
-    top_trader_ls_ratio:  v.topTrader,
-    fear_greed:           v.fearGreed,
-    // Scores
-    score_mvrv_z:         sc.mvrv_z,
-    score_nupl:           sc.nupl,
-    score_sth_sopr:       sc.sth_sopr,
-    score_lth_supply:     sc.lth_supply,
-    score_puell:          sc.puell,
-    score_funding_rate:   sc.funding,
-    score_oi_change:      sc.oi_change,
-    score_long_short:     sc.long_short,
-    score_top_trader_ls:  sc.top_trader_ls,
-    score_rsi:            sc.rsi,
-    score_fear_greed:     sc.fear_greed,
-    // Layers
-    score_valuation:      layers.valuation,
-    score_holder:         layers.holder,
-    score_mining:         layers.mining,
-    score_derivatives:    layers.derivatives,
-    score_sentiment:      layers.sentiment,
-    // Outputs
-    composite_7d:         c7d,
-    composite_30d:        c30d,
-    regime_7d:            getRegime(c7d),
-    regime_30d:           getRegime(c30d),
-    signal_7d:            sig7d,
-    signal_30d:           sig30d,
-    probability_7d:       prob7d,
-    probability_30d:      prob30d,
-    confidence_7d:        conf7d,
-    confidence_30d:       conf30d,
-    magnitude:            magnitude,
-    signals_missing:      missing.length > 0 ? missing : null,
-    fetch_errors:         errors.length > 0 ? errors : null,
-  };
+  // Gauge
+  renderGauge('7d');
 
-  const [inserted] = await sbInsert(SU, SK, "snapshots", row);
+  // Layers
+  renderLayers();
 
-  if (inserted && v.btc) {
-    await sbInsert(SU, SK, "prediction_outcomes", {
-      snapshot_id:         inserted.id,
-      snapshot_date:       snapshotDate,
-      price_at_prediction: v.btc,
-      signal_7d:           sig7d,
-      signal_14d:          sig7d,  // use 7d signal for 14d too for now
-      signal_30d:          sig30d,
-    });
-  }
+  // Signals grid
+  renderSignals();
 
-  await sbInsert(SU, SK, "worker_logs", {
-    run_type: "snapshot",
-    status:   missing.length === 0 ? "success" : "partial",
-    message:  `Snapshot ${snapshotDate} — 7d:${sig7d}(${prob7d}%) 30d:${sig30d}(${prob30d}%) magnitude:${magnitude}. Missing: ${missing.join(", ") || "none"}`,
-    details:  { c7d, c30d, sig7d, sig30d, prob7d, prob30d, conf7d, conf30d, magnitude, missing, errors },
-  });
+  // History chart
+  renderChart();
 
-  return row;
+  // Stats
+  renderStats();
+
+  // Footer missing
+  const miss = s.signals_missing;
+  document.getElementById('footerMissing').textContent =
+    miss && miss.length ? '⚠ Missing: ' + miss.join(', ') : '✓ All signals live';
 }
 
-// ── Cloudflare exports ────────────────────────────────────────
-export default {
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(runSnapshot(env));
-  },
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    if (url.pathname === "/run") {
-      if (url.searchParams.get("secret") !== env.RUN_SECRET) return new Response("Unauthorized", { status: 401 });
-      ctx.waitUntil(runSnapshot(env).then(s => console.log("Done:", JSON.stringify(s))).catch(e => console.log("Error:", e.message)));
-      return new Response(JSON.stringify({ status: "triggered", message: "Snapshot running in background" }), { headers: { "Content-Type": "application/json" } });
+function renderOrb(hz) {
+  const s = snapshot;
+  const sig = hz==='7d' ? s.signal_7d : s.signal_30d;
+  const regime = hz==='7d' ? s.regime_7d : s.regime_30d;
+  const orb = document.getElementById('signalOrb');
+  orb.className = 'signal-orb ' + signalClass(sig);
+  orb.textContent = sig || '—';
+  document.getElementById('signalRegime').textContent = regime || '—';
+  document.getElementById('signalRegime').style.color = signalColor(sig);
+}
+
+function renderProbs() {
+  const s = snapshot;
+  const sig7 = s.signal_7d;
+  const sig30 = s.signal_30d;
+  const p7 = s.probability_7d || 50;
+  const p30 = s.probability_30d || 50;
+  const c7 = s.confidence_7d || '—';
+  const c30 = s.confidence_30d || '—';
+
+  const col7 = signalColor(sig7);
+  const col30 = signalColor(sig30);
+
+  document.getElementById('prob7d').textContent = p7+'%';
+  document.getElementById('prob7d').style.color = col7;
+  document.getElementById('probBar7d').style.width = p7+'%';
+  document.getElementById('probBar7d').style.background = col7;
+  document.getElementById('conf7d').textContent = 'Confidence: '+c7+' · '+sig7;
+
+  document.getElementById('prob30d').textContent = p30+'%';
+  document.getElementById('prob30d').style.color = col30;
+  document.getElementById('probBar30d').style.width = p30+'%';
+  document.getElementById('probBar30d').style.background = col30;
+  document.getElementById('conf30d').textContent = 'Confidence: '+c30+' · '+sig30;
+}
+
+function renderGauge(hz) {
+  const s = snapshot;
+  const score = hz==='7d' ? s.composite_7d : s.composite_30d;
+  const regime = hz==='7d' ? s.regime_7d : s.regime_30d;
+  const sig = hz==='7d' ? s.signal_7d : s.signal_30d;
+  const color = scoreColor(score);
+
+  document.getElementById('gaugeNum7d').textContent = score ?? '—';
+  document.getElementById('gaugeNum7d').style.color = color;
+  document.getElementById('regime7d').textContent = regime || '—';
+  document.getElementById('regime7d').style.color = color;
+
+  const badge = document.getElementById('badge7d');
+  badge.textContent = sig || '—';
+  badge.style.background = signalColor(sig)+'22';
+  badge.style.color = signalColor(sig);
+  badge.style.border = '1px solid '+signalColor(sig)+'44';
+
+  drawGauge('gauge7d', score, color);
+}
+
+function renderLayers() {
+  const s = snapshot;
+  const grid = document.getElementById('layersGrid');
+  grid.innerHTML = LAYERS.map(l => {
+    const score = s[l.key];
+    const color = scoreColor(score);
+    return `
+      <div class="layer-card" data-tip="${l.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
+        <div class="layer-icon">${l.icon}</div>
+        <div class="layer-name">${l.name}</div>
+        <div class="layer-score-wrap">
+          <canvas id="layer_${l.key}" width="56" height="56"></canvas>
+          <div class="layer-num" style="color:${color}">${score ?? '—'}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  LAYERS.forEach(l => drawLayerDonut('layer_'+l.key, s[l.key], scoreColor(s[l.key])));
+}
+
+function renderSignals() {
+  const s = snapshot;
+  const grid = document.getElementById('signalsGrid');
+  grid.innerHTML = SIGNALS.map(sig => {
+    const score = s[sig.key];
+    const raw   = s[sig.rawKey];
+    const color = scoreColor(score);
+    const pct   = score !== null ? score : 0;
+    return `
+      <div class="signal-chip" data-tip="${sig.tip}" onmouseenter="showTip(event,this)" onmouseleave="hideTip()">
+        <div class="chip-name">${sig.name}</div>
+        <div class="chip-value" style="color:${color}">${score ?? '—'}</div>
+        <div class="chip-bar-bg">
+          <div class="chip-bar" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="chip-raw">${sig.rawFmt(raw)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderChart() {
+  renderChartField(currentChartField);
+}
+
+function renderChartField(field) {
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  if (historyChart) historyChart.destroy();
+
+  const labels = history.map(h => h.snapshot_date);
+  const data   = history.map(h => h[field]);
+
+  let color, label;
+  if (field==='btc_price') { color='#7b8cff'; label='BTC Price'; }
+  else if (field==='composite_7d') { color='#00ffaa'; label='7D Score'; }
+  else { color='#a855f7'; label='30D Score'; }
+
+  historyChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label,
+        data,
+        borderColor:color,
+        borderWidth:2,
+        pointRadius:0,
+        pointHoverRadius:4,
+        tension:0.4,
+        fill:true,
+        backgroundColor: ctx2=>{
+          const grad = ctx2.chart.ctx.createLinearGradient(0,0,0,220);
+          grad.addColorStop(0, color+'33');
+          grad.addColorStop(1, color+'00');
+          return grad;
+        },
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#0f1428',
+          borderColor:'rgba(100,120,255,0.3)',
+          borderWidth:1,
+          titleFont:{family:"'Syne Mono'",size:11},
+          bodyFont:{family:"'Syne Mono'",size:11},
+          callbacks:{
+            label:ctx2 => {
+              const v=ctx2.raw;
+              if (field==='btc_price') return ' $'+Number(v).toLocaleString();
+              return ' Score: '+v;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{
+          grid:{color:'rgba(100,120,255,0.05)'},
+          ticks:{
+            color:'#3d4270',maxTicksLimit:8,
+            font:{family:"'Syne Mono'",size:10}
+          }
+        },
+        y:{
+          grid:{color:'rgba(100,120,255,0.05)'},
+          ticks:{
+            color:'#3d4270',
+            font:{family:"'Syne Mono'",size:10},
+            callback:v => field==='btc_price' ? '$'+Number(v).toLocaleString() : v
+          },
+          ...(field!=='btc_price' ? {min:0,max:100} : {})
+        }
+      }
     }
-    if (url.pathname === "/health") return new Response(JSON.stringify({ status: "ok" }), { headers: { "Content-Type": "application/json" } });
-    return new Response("BTC Health Monitor v3", { status: 200 });
-  },
-};
+  });
+}
+
+function renderStats() {
+  const s = snapshot;
+  const items = [
+    {label:'Snapshot Date',value:s.snapshot_date,sub:'Weekly Monday'},
+    {label:'BTC Price',value:fmtPrice(s.btc_price),sub:'At snapshot'},
+    {label:'7D Probability',value:(s.probability_7d||'—')+'%',sub:(s.signal_7d||'—')+' · '+(s.confidence_7d||'—'),color:signalColor(s.signal_7d)},
+    {label:'30D Probability',value:(s.probability_30d||'—')+'%',sub:(s.signal_30d||'—')+' · '+(s.confidence_30d||'—'),color:signalColor(s.signal_30d)},
+  ];
+  document.getElementById('statsRow').innerHTML = items.map(i=>`
+    <div class="stat-card">
+      <div class="stat-label">${i.label}</div>
+      <div class="stat-value" ${i.color?`style="color:${i.color}"`:''}>${i.value}</div>
+      <div class="stat-sub">${i.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ── Interactions ──────────────────────────────────────────────
+function switchHorizon(hz, btn) {
+  horizon = hz;
+  document.querySelectorAll('#signalTabs .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderOrb(hz);
+}
+
+function switchGaugeHorizon(hz, btn, e) {
+  e.stopPropagation();
+  document.querySelectorAll('.gauge-card .tab-group .tab').forEach(t=>{
+    if(t.closest('.gauge-card')===btn.closest('.gauge-card'))t.classList.remove('active');
+  });
+  btn.classList.add('active');
+  renderGauge(hz);
+}
+
+function switchChart(field, btn) {
+  currentChartField = field;
+  document.querySelectorAll('.chart-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderChartField(field);
+}
+
+// ── Tooltip ───────────────────────────────────────────────────
+const tip = document.getElementById('tooltip');
+function showTip(e, el) {
+  const text = el.dataset.tip;
+  if (!text) return;
+  tip.textContent = text;
+  tip.classList.add('show');
+  moveTip(e);
+  el.addEventListener('mousemove', moveTip);
+}
+function moveTip(e) {
+  const x = e.clientX + 12;
+  const y = e.clientY + 12;
+  tip.style.left = Math.min(x, window.innerWidth - 240) + 'px';
+  tip.style.top  = y + 'px';
+}
+function hideTip() {
+  tip.classList.remove('show');
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+loadData();
+setInterval(loadData, 5 * 60 * 1000);
+</script>
+</body>
+</html>
