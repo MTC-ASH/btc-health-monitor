@@ -448,7 +448,7 @@ async function load(){
     // Fetch in parallel — use correct columns for each table
     const [snaps, bts, bto, ls, po, fvStats, rollingAcc] = await Promise.all([
       sbGet('snapshots', 'order=created_at.desc&limit=1'),
-      sbGet('backtest_snapshots', 'order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d'),
+      sbGet('backtest_snapshots', 'order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,realised_price,fair_value,fair_value_gap_pct'),
       sbGet('backtest_outcomes', 'order=snapshot_date.asc&select=snapshot_date,btc_price_entry,signal_7d,signal_30d,correct_7d,correct_30d,composite_7d'),
       sbGet('snapshots', 'order=snapshot_date.asc&limit=52&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,fair_value,fair_value_gap_pct,realised_price,dma_200'),
       sbGet('prediction_outcomes', 'order=snapshot_date.desc&limit=20&select=snapshot_date,price_at_prediction,price_7d,price_30d,pct_change_7d,pct_change_30d,signal_7d,signal_30d,correct_7d,correct_30d'),
