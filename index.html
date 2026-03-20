@@ -162,7 +162,7 @@ html,body{height:100%;background:var(--paper);color:var(--ink);font-family:var(-
 /* ── BOTTOM ROW ── */
 .bottom{
   display:grid;
-  grid-template-columns:1fr 1.8fr 1fr;
+  grid-template-columns:1fr 1.8fr 1fr 1fr;
   gap:8px;
   min-height:160px;
   max-height:200px;
@@ -359,11 +359,13 @@ html,body{height:100%;background:var(--paper);color:var(--ink);font-family:var(-
     <div class="chart-header">
       <div class="chart-modes">
         <button class="cmode on" id="cm0" onclick="swMode('signals',this)">Price + Signals</button>
-        <button class="cmode" id="cm1" onclick="swMode('gap',this)">FV Gap %</button>
-        <button class="cmode" id="cm2" onclick="swMode('score',this)">Health Score</button>
+        <button class="cmode" id="cm1" onclick="swMode('fairvalue',this)">Fair Value</button>
+        <button class="cmode" id="cm2" onclick="swMode('gap',this)">FV Gap %</button>
+        <button class="cmode" id="cm3" onclick="swMode('score',this)">Score + Price</button>
       </div>
       <div class="chart-legend" id="cLegend">
         <div class="cl-item"><div class="cl-line" style="background:var(--slate)"></div>BTC Price</div>
+      <div class="chart-legend" id="cLegendSimple" style="display:none;flex-wrap:wrap;gap:10px"></div>
         <div class="cl-item"><div class="cl-line" style="background:var(--rule2);border-top:1px dashed var(--rule2)"></div>Fair Value</div>
         <div class="cl-item"><div class="cl-tri-up"></div>UP correct</div>
         <div class="cl-tri-up-h"><svg width="8" height="7"><polygon points="4,0 8,7 0,7" fill="none" stroke="#3a7a4a" stroke-width="1.3"/></svg></div><div style="font-family:var(--code);font-size:9px;color:var(--ink3)">UP wrong</div>
@@ -402,6 +404,12 @@ html,body{height:100%;background:var(--paper);color:var(--ink);font-family:var(-
       <div id="btContent"></div>
     </div>
 
+    <!-- Track record -->
+    <div class="bcard">
+      <div class="bcard-title">Live prediction track record</div>
+      <div id="predContent"></div>
+    </div>
+
   </div>
 
 </div>
@@ -409,7 +417,7 @@ html,body{height:100%;background:var(--paper);color:var(--ink);font-family:var(-
 <script>
 const SB='https://amrxduglanxsrdkvkbvd.supabase.co';
 const SK='sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
-let snap=null, btSnaps=[], btOut=[], liveSnaps=[], chart=null, mode='signals';
+let snap=null, btSnaps=[], btOut=[], liveSnaps=[], predOutcomes=[], chart=null, mode='signals';
 const TODAY=new Date().toISOString().split('T')[0];
 
 // ── Fetch helpers ──────────────────────────────────────────────
@@ -437,11 +445,12 @@ async function load(){
 
   try {
     // Fetch in parallel — use correct columns for each table
-    const [snaps, bts, bto, ls] = await Promise.all([
+    const [snaps, bts, bto, ls, po] = await Promise.all([
       sbGet('snapshots', 'order=created_at.desc&limit=1'),
       sbGet('backtest_snapshots', 'order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d'),
       sbGet('backtest_outcomes', 'order=snapshot_date.asc&select=snapshot_date,btc_price_entry,signal_7d,signal_30d,correct_7d,correct_30d,composite_7d'),
-      sbGet('snapshots', 'order=snapshot_date.asc&limit=52&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,fair_value,fair_value_gap_pct'),
+      sbGet('snapshots', 'order=snapshot_date.asc&limit=52&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,fair_value,fair_value_gap_pct,realised_price,dma_200'),
+      sbGet('prediction_outcomes', 'order=snapshot_date.desc&limit=20&select=snapshot_date,price_at_prediction,price_7d,price_30d,pct_change_7d,pct_change_30d,signal_7d,signal_30d,correct_7d,correct_30d'),
     ]);
 
     if(!snaps || !snaps.length) throw new Error('No snapshot data found');
@@ -450,6 +459,7 @@ async function load(){
     btSnaps = bts || [];
     btOut = bto || [];
     liveSnaps = ls || [];
+    predOutcomes = po || [];
 
     setSub('Rendering…');
     render();
@@ -554,6 +564,7 @@ function render(){
   renderAnalysis();
   renderChips();
   renderBacktest();
+  renderPredictions();
   drawChart();
 }
 
@@ -679,26 +690,51 @@ function swMode(m, btn){
   mode = m;
   document.querySelectorAll('.cmode').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
-  document.getElementById('cLegend').style.display = m==='signals' ? 'flex' : 'none';
+  const isSignals = m === 'signals';
+  document.getElementById('cLegend').style.display = isSignals ? 'flex' : 'none';
+  document.getElementById('cLegendSimple').style.display = isSignals ? 'none' : 'flex';
   drawChart();
+}
+
+function pct(n,d){ return d>0?Math.round(n/d*100):0; }
+
+function mkXTicks(validArr){
+  return {
+    color:'#b8b4ac', maxTicksLimit:10, font:{family:"'Source Code Pro'",size:9}, maxRotation:0,
+    callback:(v,i)=>{
+      const h = validArr[i];
+      if(!h) return '';
+      const dt = new Date(h.snapshot_date);
+      return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+    }
+  };
+}
+
+function buildCombined(){
+  const liveMap = {};
+  liveSnaps.forEach(r=>{ liveMap[r.snapshot_date] = r; });
+  const combined = [...btSnaps].map(b=>({...b,...(liveMap[b.snapshot_date]||{})}));
+  liveSnaps.forEach(r=>{ if(!combined.find(c=>c.snapshot_date===r.snapshot_date)) combined.push(r); });
+  combined.sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
+  combined.forEach(h=>{
+    if(!h.fair_value && h.realised_price) h.fair_value = Math.round(h.realised_price * 1.7);
+    if((h.fair_value_gap_pct===null||h.fair_value_gap_pct===undefined) && h.btc_price && h.fair_value)
+      h.fair_value_gap_pct = ((h.btc_price - h.fair_value) / h.fair_value * 100);
+  });
+  return combined;
 }
 
 function drawChart(){
   const ctx = document.getElementById('mainChart').getContext('2d');
   if(chart) chart.destroy();
-
-  // Build combined timeline: backtest + live, deduplicated
-  const liveMap = {};
-  liveSnaps.forEach(r=>{ liveMap[r.snapshot_date] = r; });
-  const combined = [...btSnaps].map(b=>({...b, ...(liveMap[b.snapshot_date]||{})}));
-  liveSnaps.forEach(r=>{ if(!combined.find(c=>c.snapshot_date===r.snapshot_date)) combined.push(r); });
-  combined.sort((a,b)=>a.snapshot_date.localeCompare(b.snapshot_date));
-
-  if(mode==='signals') drawSignalsChart(ctx, combined);
-  else if(mode==='gap') drawGapChart(ctx, combined);
-  else drawScoreChart(ctx, combined);
+  const all = buildCombined();
+  if(mode==='signals')   drawSignalsChart(ctx, all);
+  else if(mode==='fairvalue') drawFairValueChart(ctx, all);
+  else if(mode==='gap')  drawGapChart(ctx, all);
+  else if(mode==='score') drawScoreChart(ctx, all);
 }
 
+// ── CHART 1: Price + Signals ───────────────────────────────────
 function drawSignalsChart(ctx, all){
   const valid = all.filter(h=>h.btc_price);
   const todayIdx = valid.findIndex(h=>h.snapshot_date>=TODAY);
@@ -706,18 +742,10 @@ function drawSignalsChart(ctx, all){
   const liveP = valid.map((h,i)=>todayIdx!==-1&&i>=todayIdx?h.btc_price:null);
   const fvP   = valid.map(h=>h.fair_value||null);
 
-  // Derive fair_value for rows that don't have it
-  valid.forEach(h=>{
-    if(!h.fair_value && h.realised_price) {
-      h.fair_value = Math.round(h.realised_price * 1.7);
-    }
-  });
-
-  // Map signals to indices
   const sig = {upOk:{},upFail:{},dnOk:{},dnFail:{}};
   btOut.forEach(o=>{
     const i = valid.findIndex(h=>h.snapshot_date===o.snapshot_date);
-    if(i===-1||!valid[i].btc_price) return;
+    if(i===-1||!valid[i]?.btc_price) return;
     const p = valid[i].btc_price;
     if(o.signal_7d==='UP')   { if(o.correct_7d===true) sig.upOk[i]=p; else if(o.correct_7d===false) sig.upFail[i]=p; }
     if(o.signal_7d==='DOWN') { if(o.correct_7d===true) sig.dnOk[i]=p; else if(o.correct_7d===false) sig.dnFail[i]=p; }
@@ -728,10 +756,11 @@ function drawSignalsChart(ctx, all){
     afterDatasetsDraw(ch){
       const {ctx:c,scales:{x,y}} = ch;
       const tri = (xi,yi,up,filled) => {
+        if(!x||!y) return;
         const px=x.getPixelForValue(xi), py=y.getPixelForValue(yi), sz=6;
         c.save(); c.beginPath();
         if(up){ c.moveTo(px,py-sz-2);c.lineTo(px+sz,py+sz-2);c.lineTo(px-sz,py+sz-2); }
-        else  { c.moveTo(px,py+sz+14);c.lineTo(px+sz,py-sz+14);c.lineTo(px-sz,py-sz+14); }
+        else  { c.moveTo(px,py+sz+12);c.lineTo(px+sz,py-sz+12);c.lineTo(px-sz,py-sz+12); }
         c.closePath();
         if(filled){ c.fillStyle=up?'#3a7a4a':'#8a3a24';c.fill(); }
         else { c.strokeStyle=up?'#3a7a4a':'#8a3a24';c.lineWidth=1.3;c.stroke(); }
@@ -741,117 +770,236 @@ function drawSignalsChart(ctx, all){
       Object.entries(sig.upFail).forEach(([i,p])=>tri(+i,p,true,false));
       Object.entries(sig.dnOk).forEach(([i,p])=>tri(+i,p,false,true));
       Object.entries(sig.dnFail).forEach(([i,p])=>tri(+i,p,false,false));
-      // Today line
       if(todayIdx!==-1){
         const px=x.getPixelForValue(todayIdx);
         c.save();c.beginPath();c.setLineDash([3,3]);
         c.moveTo(px,ch.chartArea.top);c.lineTo(px,ch.chartArea.bottom);
-        c.strokeStyle='rgba(106,64,20,0.35)';c.lineWidth=1;c.stroke();c.restore();
+        c.strokeStyle='rgba(106,64,20,0.4)';c.lineWidth=1;c.stroke();c.restore();
       }
     }
   };
 
-  const upC=Object.keys(sig.upOk).length,upF=Object.keys(sig.upFail).length;
-  const dnC=Object.keys(sig.dnOk).length,dnF=Object.keys(sig.dnFail).length;
+  const upC=Object.keys(sig.upOk).length, upF=Object.keys(sig.upFail).length;
+  const dnC=Object.keys(sig.dnOk).length, dnF=Object.keys(sig.dnFail).length;
 
   chart = new Chart(ctx,{
     type:'line', plugins:[sigPlugin],
     data:{labels:valid.map((_,i)=>i), datasets:[
       {data:histP,borderColor:'#2a3a5c',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,
-        backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,180);g.addColorStop(0,'rgba(42,58,92,0.1)');g.addColorStop(1,'rgba(42,58,92,0)');return g;}},
+        backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,200);g.addColorStop(0,'rgba(42,58,92,0.1)');g.addColorStop(1,'rgba(42,58,92,0)');return g;}},
       {data:liveP,borderColor:'#8a6020',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.3,fill:false},
-      {data:fvP,borderColor:'rgba(0,0,0,0.2)',borderWidth:1,borderDash:[2,4],pointRadius:0,tension:0.3,fill:false},
+      {data:fvP,borderColor:'rgba(0,0,0,0.2)',borderWidth:1,borderDash:[3,4],pointRadius:0,tension:0.3,fill:false},
     ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{legend:{display:false},
-        tooltip:{backgroundColor:'#1e1c16',borderWidth:0,padding:8,
-          titleFont:{family:"'Source Code Pro'",size:9},bodyFont:{family:"'Source Code Pro'",size:10},
-          callbacks:{
-            title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
-            label:x=>{const v=x.raw;if(!v)return null;
-              if(x.datasetIndex===2) return ' Fair value: $'+Number(v).toLocaleString();
-              return ' BTC: $'+Number(v).toLocaleString();}}}},
-      scales:{
-        x:{grid:{display:false},border:{display:false},
-          ticks:{color:'#b8b4ac',maxTicksLimit:10,font:{family:"'Source Code Pro'",size:9},maxRotation:0,
-            callback:(v,i)=>{const d=valid[i]?.snapshot_date;if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit'});}}},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e1c16',borderWidth:0,padding:8,
+        titleFont:{family:"'Source Code Pro'",size:9},bodyFont:{family:"'Source Code Pro'",size:10},
+        callbacks:{title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
+          label:x=>{const v=x.raw;if(!v)return null;if(x.datasetIndex===2)return ' Fair value: $'+Number(v).toLocaleString();return ' BTC: $'+Number(v).toLocaleString();}}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:mkXTicks(valid)},
         y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},
           ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9},callback:v=>'$'+Number(v/1000).toFixed(0)+'k'}}}}
   });
   document.getElementById('cfRange').textContent = valid.length+' weeks · '+valid[0]?.snapshot_date+' → '+valid[valid.length-1]?.snapshot_date;
-  document.getElementById('cfStats').textContent = `UP: ${upC}/${upC+upF} correct (${Math.round(upC/(upC+upF||1)*100)}%) · DOWN: ${dnC}/${dnC+dnF} correct (${Math.round(dnC/(dnC+dnF||1)*100)}%)`;
+  document.getElementById('cfStats').textContent = 'UP: '+upC+'/'+(upC+upF)+' correct ('+pct(upC,upC+upF)+'%) · DOWN: '+dnC+'/'+(dnC+dnF)+' correct ('+pct(dnC,dnC+dnF)+'%)';
 }
 
-function drawGapChart(ctx, all){
-  // Calculate gap from available data
-  // For backtest rows: use (btc_price - realised_price*1.7) / (realised_price*1.7) * 100
-  // For live rows: use fair_value_gap_pct directly
-  const valid = all.filter(h=>{
-    if(h.fair_value_gap_pct!==null&&h.fair_value_gap_pct!==undefined) return true;
-    if(h.btc_price && h.realised_price) return true; // can derive
-    return false;
-  }).map(h=>{
-    if(h.fair_value_gap_pct!==null&&h.fair_value_gap_pct!==undefined) return h;
-    // Derive: gap = (price - FV) / FV * 100, using MVRV anchor as FV proxy
-    const fv = h.realised_price * 1.7;
-    return {...h, fair_value_gap_pct: ((h.btc_price - fv) / fv * 100)};
+// ── CHART 2: Fair Value anchors overlay ────────────────────────
+function drawFairValueChart(ctx, all){
+  const valid = all.filter(h=>h.btc_price && h.realised_price);
+  const todayIdx = valid.findIndex(h=>h.snapshot_date>=TODAY);
+  const sp = (field, future) => valid.map((h,i)=>{
+    const isFuture = todayIdx!==-1 && i>=todayIdx;
+    if(future && !isFuture) return null;
+    if(!future && isFuture) return null;
+    return h[field]||null;
   });
-  if(!valid.length){
-    document.getElementById('cfRange').textContent='FV Gap data not available — trigger Worker v4 to populate';
-    return;
-  }
+
+  chart = new Chart(ctx,{
+    type:'line',
+    data:{labels:valid.map((_,i)=>i), datasets:[
+      {data:sp('btc_price',false),borderColor:'#2a3a5c',borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+      {data:sp('btc_price',true),borderColor:'#8a6020',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.3,fill:false},
+      {data:valid.map(h=>h.realised_price||null),borderColor:'#2d7a48',borderWidth:1.5,borderDash:[6,2],pointRadius:0,tension:0.3,fill:false},
+      {data:valid.map(h=>h.dma_200||null),borderColor:'#7a4a9a',borderWidth:1,borderDash:[2,4],pointRadius:0,tension:0.3,fill:false},
+      {data:valid.map(h=>h.fair_value||null),borderColor:'rgba(0,0,0,0.28)',borderWidth:1,borderDash:[4,3],pointRadius:0,tension:0.3,fill:false},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e1c16',borderWidth:0,padding:8,
+        titleFont:{family:"'Source Code Pro'",size:9},bodyFont:{family:"'Source Code Pro'",size:10},
+        callbacks:{title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
+          label:x=>{const v=x.raw;if(!v)return null;const lb=['BTC','BTC (live)','Realised Price','200-Day MA','Fair Value'];return ' '+(lb[x.datasetIndex]||'')+': $'+Number(v).toLocaleString();}}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:mkXTicks(valid)},
+        y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},
+          ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9},callback:v=>'$'+Number(v/1000).toFixed(0)+'k'}}}}
+  });
+
+  document.getElementById('cLegendSimple').innerHTML = `
+    <div class="cl-item"><div class="cl-line" style="background:#2a3a5c;height:2px"></div>BTC Price</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:1.5px dashed #2d7a48"></div>Realised Price</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:1px dashed #7a4a9a"></div>200-Day MA</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:1px dashed rgba(0,0,0,0.3)"></div>Fair Value (MVRV×1.7)</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:2px dashed #8a6020"></div>Live (forward)</div>
+  `;
+  document.getElementById('cfRange').textContent = valid.length+' weeks · All four price anchors overlaid';
+  document.getElementById('cfStats').textContent = 'BTC: $'+Number(snap.btc_price||0).toLocaleString()+' · Fair Value: $'+Number(snap.fair_value||0).toLocaleString()+' · Realised: $'+Number(snap.realised_price||0).toLocaleString()+' · 200DMA: $'+Number(snap.dma_200||0).toLocaleString();
+}
+
+// ── CHART 3: FV Gap % oscillation ─────────────────────────────
+function drawGapChart(ctx, all){
+  const valid = all.filter(h=>h.fair_value_gap_pct!==null&&h.fair_value_gap_pct!==undefined&&h.btc_price);
+  if(!valid.length){ document.getElementById('cfRange').textContent='No gap data'; return; }
   const todayIdx = valid.findIndex(h=>h.snapshot_date>=TODAY);
   const histG = valid.map((h,i)=>todayIdx===-1||i<todayIdx?h.fair_value_gap_pct:null);
   const liveG = valid.map((h,i)=>todayIdx!==-1&&i>=todayIdx?h.fair_value_gap_pct:null);
+  const below = valid.filter(h=>h.fair_value_gap_pct<0).length;
+  const above = valid.filter(h=>h.fair_value_gap_pct>0).length;
+  const minG = Math.min(...valid.map(h=>h.fair_value_gap_pct));
+  const maxG = Math.max(...valid.map(h=>h.fair_value_gap_pct));
 
-  chart = new Chart(ctx,{type:'line',
-    data:{labels:valid.map((_,i)=>i),datasets:[
-      {data:histG,borderColor:'#1a5c5a',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,
-        backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,180);g.addColorStop(0,'rgba(26,92,90,0.12)');g.addColorStop(1,'rgba(26,92,90,0)');return g;}},
+  const zeroPlugin = {
+    id:'zero',
+    afterDatasetsDraw(ch){
+      const {ctx:c,scales:{x,y},chartArea} = ch;
+      if(!y) return;
+      const py = y.getPixelForValue(0);
+      c.save();
+      c.beginPath();c.strokeStyle='rgba(0,0,0,0.18)';c.lineWidth=1;c.setLineDash([]);
+      c.moveTo(chartArea.left,py);c.lineTo(chartArea.right,py);c.stroke();
+      c.fillStyle='rgba(0,0,0,0.25)';c.font="9px 'Source Code Pro'";
+      c.fillText('FAIR VALUE',chartArea.left+6,py-4);
+      c.restore();
+    }
+  };
+
+  chart = new Chart(ctx,{
+    type:'line', plugins:[zeroPlugin],
+    data:{labels:valid.map((_,i)=>i), datasets:[
+      {data:histG,borderColor:'#1a5c5a',borderWidth:1.5,pointRadius:0,tension:0.3,fill:'+1',
+        backgroundColor:(x)=>{
+          const ch=x.chart, mid=ch.scales?.y?.getPixelForValue(0), top=ch.chartArea?.top, h=ch.chartArea?.height;
+          if(!mid||!h) return 'rgba(26,92,90,0.1)';
+          const g=ch.ctx.createLinearGradient(0,top,0,top+h);
+          const p=Math.max(0,Math.min(1,(mid-top)/h));
+          g.addColorStop(0,'rgba(139,58,36,0.18)');
+          g.addColorStop(Math.max(0,p-0.01),'rgba(139,58,36,0.02)');
+          g.addColorStop(Math.min(1,p+0.01),'rgba(26,92,90,0.02)');
+          g.addColorStop(1,'rgba(26,92,90,0.18)');
+          return g;
+        }},
       {data:liveG,borderColor:'#8a6020',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.3,fill:false},
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e1c16',borderWidth:0,padding:8,
         titleFont:{family:"'Source Code Pro'",size:9},bodyFont:{family:"'Source Code Pro'",size:10},
-        callbacks:{title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
-          label:x=>{const v=x.raw;if(!v)return null;return ' Gap: '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';}}}},
-      scales:{x:{grid:{display:false},border:{display:false},ticks:{color:'#b8b4ac',maxTicksLimit:10,font:{family:"'Source Code Pro'",size:9},maxRotation:0,
-            callback:(v,i)=>{const d=valid[i]?.snapshot_date;if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit'});}}},
+        callbacks:{title:items=>{const h=valid[items[0].dataIndex];return h?h.snapshot_date+' · $'+Number(h.btc_price).toLocaleString():'';},
+          label:x=>{const v=x.raw;if(v===null||v===undefined)return null;return ' '+(v<0?'Undervalued':'Overvalued')+': '+(v>=0?'+':'')+Number(v).toFixed(1)+'%';}}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:mkXTicks(valid)},
         y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},
-          ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9},callback:v=>(v>=0?'+':'')+v+'%'}}}}
+          ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9},callback:v=>(v>=0?'+':'')+Number(v).toFixed(0)+'%'}}}}
   });
-  document.getElementById('cfRange').textContent = valid.length+' data points · BTC oscillation vs fair value';
-  document.getElementById('cfStats').textContent = 'Below 0 = undervalued · Above 0 = overvalued · Current: '+fPct(snap.fair_value_gap_pct);
+
+  document.getElementById('cLegendSimple').innerHTML = `
+    <div class="cl-item"><div style="width:12px;height:8px;background:rgba(26,92,90,0.25);border:1px solid #1a5c5a"></div>Undervalued (below 0%)</div>
+    <div class="cl-item"><div style="width:12px;height:8px;background:rgba(139,58,36,0.25);border:1px solid #8b3a24"></div>Overvalued (above 0%)</div>
+    <div class="cl-item" style="color:var(--ink3);font-family:var(--code);font-size:9px">Max discount: ${minG.toFixed(1)}%</div>
+    <div class="cl-item" style="color:var(--ink3);font-family:var(--code);font-size:9px">Max premium: +${maxG.toFixed(1)}%</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:2px dashed #8a6020"></div>Live (forward)</div>
+  `;
+  document.getElementById('cfRange').textContent = valid.length+' weeks · '+below+' wks undervalued ('+pct(below,valid.length)+'%) · '+above+' wks overvalued ('+pct(above,valid.length)+'%)';
+  document.getElementById('cfStats').textContent = 'Current: '+(snap.fair_value_gap_pct>=0?'+':'')+Number(snap.fair_value_gap_pct||0).toFixed(1)+'% · Max discount: '+minG.toFixed(1)+'% · Max premium: +'+maxG.toFixed(1)+'%';
 }
 
+// ── CHART 4: Health Score + BTC price (dual axis) ──────────────
 function drawScoreChart(ctx, all){
-  const valid = all.filter(h=>h.composite_7d!==null);
+  const valid = all.filter(h=>h.composite_7d!==null&&h.btc_price);
   const todayIdx = valid.findIndex(h=>h.snapshot_date>=TODAY);
-  const hist7 = valid.map((h,i)=>todayIdx===-1||i<todayIdx?h.composite_7d:null);
-  const live7 = valid.map((h,i)=>todayIdx!==-1&&i>=todayIdx?h.composite_7d:null);
+  const hist7   = valid.map((h,i)=>todayIdx===-1||i<todayIdx?h.composite_7d:null);
+  const live7   = valid.map((h,i)=>todayIdx!==-1&&i>=todayIdx?h.composite_7d:null);
+  const histBtc = valid.map((h,i)=>todayIdx===-1||i<todayIdx?h.btc_price:null);
+  const liveBtc = valid.map((h,i)=>todayIdx!==-1&&i>=todayIdx?h.btc_price:null);
 
-  chart = new Chart(ctx,{type:'line',
-    data:{labels:valid.map((_,i)=>i),datasets:[
-      {data:hist7,borderColor:'#2d5c38',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,
-        backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,180);g.addColorStop(0,'rgba(45,92,56,0.1)');g.addColorStop(1,'rgba(45,92,56,0)');return g;}},
-      {data:live7,borderColor:'#8a6020',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.3,fill:false},
+  const threshPlugin = {
+    id:'thresh',
+    afterDatasetsDraw(ch){
+      const {ctx:c,scales,chartArea} = ch;
+      if(!scales.y) return;
+      [{v:55,label:'DOWN ≥55',col:'rgba(139,58,36,0.45)'},{v:32,label:'UP ≤32',col:'rgba(45,122,72,0.45)'}].forEach(({v,label,col})=>{
+        const py = scales.y.getPixelForValue(v);
+        c.save();c.beginPath();c.setLineDash([4,3]);c.strokeStyle=col;c.lineWidth=1;
+        c.moveTo(chartArea.left,py);c.lineTo(chartArea.right,py);c.stroke();
+        c.fillStyle=col;c.font="9px 'Source Code Pro'";c.fillText(label,chartArea.left+4,py-3);
+        c.restore();
+      });
+    }
+  };
+
+  chart = new Chart(ctx,{
+    type:'line', plugins:[threshPlugin],
+    data:{labels:valid.map((_,i)=>i), datasets:[
+      {data:hist7,borderColor:'#2d5c38',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true,yAxisID:'y',
+        backgroundColor:x=>{const g=x.chart.ctx.createLinearGradient(0,0,0,200);g.addColorStop(0,'rgba(45,92,56,0.12)');g.addColorStop(1,'rgba(45,92,56,0)');return g;}},
+      {data:live7,borderColor:'#8a6020',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.4,fill:false,yAxisID:'y'},
+      {data:histBtc,borderColor:'rgba(42,58,92,0.3)',borderWidth:1,pointRadius:0,tension:0.3,fill:false,yAxisID:'y2'},
+      {data:liveBtc,borderColor:'rgba(138,96,32,0.3)',borderWidth:1,borderDash:[4,3],pointRadius:0,tension:0.3,fill:false,yAxisID:'y2'},
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e1c16',borderWidth:0,padding:8,
         titleFont:{family:"'Source Code Pro'",size:9},bodyFont:{family:"'Source Code Pro'",size:10},
         callbacks:{title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
-          label:x=>{const v=x.raw;if(!v)return null;return ' Score: '+v;}}}},
-      scales:{x:{grid:{display:false},border:{display:false},ticks:{color:'#b8b4ac',maxTicksLimit:10,font:{family:"'Source Code Pro'",size:9},maxRotation:0,
-            callback:(v,i)=>{const d=valid[i]?.snapshot_date;if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('en-US',{month:'short',year:'2-digit'});}}},
-        y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},min:0,max:100,
-          ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9}}}}}
+          label:x=>{const v=x.raw;if(!v)return null;return x.datasetIndex<=1?' Score: '+v:' BTC: $'+Number(v).toLocaleString();}}}},
+      scales:{
+        x:{grid:{display:false},border:{display:false},ticks:mkXTicks(valid)},
+        y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},min:0,max:100,position:'left',
+          ticks:{color:'#2d5c38',font:{family:"'Source Code Pro'",size:9}}},
+        y2:{grid:{display:false},border:{display:false},position:'right',
+          ticks:{color:'rgba(42,58,92,0.45)',font:{family:"'Source Code Pro'",size:9},callback:v=>'$'+Number(v/1000).toFixed(0)+'k'}}
+      }}
   });
-  document.getElementById('cfRange').textContent = valid.length+' weekly health scores · 0=oversold 100=overbought';
-  document.getElementById('cfStats').textContent = 'UP threshold ≤54 · DOWN threshold ≥55 · Current 7D: '+snap.composite_7d;
+
+  document.getElementById('cLegendSimple').innerHTML = `
+    <div class="cl-item"><div class="cl-line" style="background:#2d5c38;height:2px"></div>Health Score (left)</div>
+    <div class="cl-item"><div class="cl-line" style="background:rgba(42,58,92,0.4)"></div>BTC Price (right, faint)</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:2px dashed #8a6020"></div>Live (forward)</div>
+    <div class="cl-item" style="color:var(--sage2);font-family:var(--code);font-size:9px">UP≤32 · DOWN≥55 thresholds shown</div>
+  `;
+  document.getElementById('cfRange').textContent = valid.length+' weekly health scores · BTC price (faint) on right axis';
+  document.getElementById('cfStats').textContent = 'Current 7D score: '+snap.composite_7d+' · Signal: '+(snap.signal_7d||'—')+' · BTC: $'+Number(snap.btc_price||0).toLocaleString();
 }
 
-// ── Tooltip ────────────────────────────────────────────────────
+// ── Predictions track record ───────────────────────────────────
+function renderPredictions(){
+  const el = document.getElementById('predContent');
+  if(!el) return;
+  if(!predOutcomes || predOutcomes.length===0){
+    el.innerHTML = '<div style="font-size:11px;color:var(--ink3);font-style:italic">No live predictions yet. Model fires weekly — check back after next Monday run.</div>';
+    return;
+  }
+  const rows = predOutcomes.map(p=>{
+    const sig = p.signal_7d||'—';
+    const col = sigCol(sig);
+    const correct = p.correct_7d;
+    const pctChg = p.pct_change_7d;
+    const resolved = pctChg!==null&&pctChg!==undefined;
+    const outcome = resolved ? (correct===true?'✓':'✗') : '⏳';
+    const outcomeCol = correct===true?'var(--sage2)':correct===false?'var(--sienna2)':'var(--ink3)';
+    return `<div class="bt-stat">
+      <div class="bt-left">
+        <div class="bt-nm">${p.snapshot_date}</div>
+        <div class="bt-desc">Entry: $${Number(p.price_at_prediction||0).toLocaleString()} · Signal: <span style="color:${col};font-weight:600">${sig}</span></div>
+      </div>
+      <div class="bt-right">
+        ${resolved?`<div style="font-family:var(--code);font-size:11px;color:${outcomeCol}">${outcome} ${(pctChg>=0?'+':'')+Number(pctChg).toFixed(1)}%</div>`:`<div style="font-family:var(--code);font-size:10px;color:var(--ink3)">⏳ pending</div>`}
+      </div>
+    </div>`;
+  }).join('');
+  const resolved = predOutcomes.filter(p=>p.correct_7d!==null);
+  const correct = resolved.filter(p=>p.correct_7d===true).length;
+  const header = resolved.length>0
+    ? `<div style="font-family:var(--code);font-size:9px;color:var(--ink3);margin-bottom:6px;letter-spacing:1px">${correct}/${resolved.length} RESOLVED CORRECT (${pct(correct,resolved.length)}%)</div>`
+    : `<div style="font-family:var(--code);font-size:9px;color:var(--ink3);margin-bottom:6px;letter-spacing:1px">${predOutcomes.length} SIGNALS PENDING RESOLUTION</div>`;
+  el.innerHTML = header + rows;
+}
+
 const tipEl = document.getElementById('tip');
 function showT(e,el){const t=el.dataset.tip;if(!t)return;tipEl.textContent=t;tipEl.classList.add('show');mv(e);el.addEventListener('mousemove',mv);}
 function mv(e){tipEl.style.left=Math.min(e.clientX+12,window.innerWidth-235)+'px';tipEl.style.top=(e.clientY+12)+'px';}
