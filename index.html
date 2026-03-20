@@ -633,7 +633,7 @@ const CHIPS_DEF = [
   {k:'score_mvrv_z',    n:'MVRV Z',   rk:'mvrv_z',              rf:v=>v?.toFixed(2),          desc:'Market vs realised value'},
   {k:'score_nupl',      n:'NUPL',     rk:'nupl',                rf:v=>v?.toFixed(3),          desc:'Unrealised profit/loss'},
   {k:'score_sth_sopr',  n:'SOPR',     rk:'sth_sopr',            rf:v=>v?.toFixed(3),          desc:'Short-term holder behaviour'},
-  {k:'score_lth_supply',n:'LTH Sup',  rk:'lth_supply_4w_change',rf:v=>v?v.toFixed(1)+'%':'—',desc:'Long-term holder flow'},
+  {k:'score_lth_supply',n:'LTH Sup',  rk:'lth_supply_4w_change',rf:v=>v?v.toFixed(1)+'%':'4w needed',desc:'Long-term holder 4-week flow (requires 4 weeks of data)'},
   {k:'score_puell',     n:'Puell',    rk:'puell_multiple',      rf:v=>v?.toFixed(2),          desc:'Miner revenue multiple'},
   {k:'score_funding_rate',n:'Funding',rk:'funding_rate_7d_avg', rf:v=>v?(v*100).toFixed(4)+'%':'—',desc:'Perp funding 7d avg'},
   {k:'score_oi_change', n:'OI 7D',    rk:'oi_change_7d',        rf:v=>v?v.toFixed(1)+'%':'—',desc:'Open interest change'},
@@ -772,9 +772,21 @@ function drawSignalsChart(ctx, all){
       Object.entries(sig.dnFail).forEach(([i,p])=>tri(+i,p,false,false));
       if(todayIdx!==-1){
         const px=x.getPixelForValue(todayIdx);
-        c.save();c.beginPath();c.setLineDash([3,3]);
+        c.save();
+        // Divider line
+        c.beginPath();c.setLineDash([]);
         c.moveTo(px,ch.chartArea.top);c.lineTo(px,ch.chartArea.bottom);
-        c.strokeStyle='rgba(106,64,20,0.4)';c.lineWidth=1;c.stroke();c.restore();
+        c.strokeStyle='rgba(106,64,20,0.5)';c.lineWidth=1.5;c.stroke();
+        // Labels either side
+        c.font="bold 9px 'Source Code Pro'";
+        c.fillStyle='rgba(42,58,92,0.5)';
+        c.textAlign='right';
+        c.fillText('◄ BACKTESTED',px-6,ch.chartArea.top+14);
+        c.fillStyle='rgba(138,96,32,0.6)';
+        c.textAlign='left';
+        c.fillText('LIVE ►',px+6,ch.chartArea.top+14);
+        c.textAlign='left';
+        c.restore();
       }
     }
   };
@@ -846,9 +858,17 @@ function drawFairValueChart(ctx, all){
 
 // ── CHART 3: FV Gap % oscillation ─────────────────────────────
 function drawGapChart(ctx, all){
+  // Derive gap for any row that has btc_price + realised_price but no gap yet
+  all.forEach(h=>{
+    if((h.fair_value_gap_pct===null||h.fair_value_gap_pct===undefined) && h.btc_price && h.realised_price){
+      const fv = h.realised_price * 1.7;
+      h.fair_value_gap_pct = ((h.btc_price - fv) / fv * 100);
+    }
+  });
   const valid = all.filter(h=>h.fair_value_gap_pct!==null&&h.fair_value_gap_pct!==undefined&&h.btc_price);
-  if(!valid.length){ document.getElementById('cfRange').textContent='No gap data'; return; }
+  if(!valid.length){ document.getElementById('cfRange').textContent='No gap data — need realised_price in backtest'; return; }
   const todayIdx = valid.findIndex(h=>h.snapshot_date>=TODAY);
+  // Backtested history = teal, live/forward = amber dashed
   const histG = valid.map((h,i)=>todayIdx===-1||i<todayIdx?h.fair_value_gap_pct:null);
   const liveG = valid.map((h,i)=>todayIdx!==-1&&i>=todayIdx?h.fair_value_gap_pct:null);
   const below = valid.filter(h=>h.fair_value_gap_pct<0).length;
@@ -899,11 +919,11 @@ function drawGapChart(ctx, all){
   });
 
   document.getElementById('cLegendSimple').innerHTML = `
-    <div class="cl-item"><div style="width:12px;height:8px;background:rgba(26,92,90,0.25);border:1px solid #1a5c5a"></div>Undervalued (below 0%)</div>
-    <div class="cl-item"><div style="width:12px;height:8px;background:rgba(139,58,36,0.25);border:1px solid #8b3a24"></div>Overvalued (above 0%)</div>
-    <div class="cl-item" style="color:var(--ink3);font-family:var(--code);font-size:9px">Max discount: ${minG.toFixed(1)}%</div>
-    <div class="cl-item" style="color:var(--ink3);font-family:var(--code);font-size:9px">Max premium: +${maxG.toFixed(1)}%</div>
-    <div class="cl-item"><div class="cl-line" style="border-top:2px dashed #8a6020"></div>Live (forward)</div>
+    <div class="cl-item"><div class="cl-line" style="background:#1a5c5a;height:1.5px"></div>Backtested history (teal)</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:2px dashed #8a6020"></div>Live / forward (amber)</div>
+    <div class="cl-item"><div style="width:12px;height:8px;background:rgba(26,92,90,0.2);border:1px solid #1a5c5a;border-radius:1px"></div>Undervalued zone</div>
+    <div class="cl-item"><div style="width:12px;height:8px;background:rgba(139,58,36,0.2);border:1px solid #8b3a24;border-radius:1px"></div>Overvalued zone</div>
+    <div class="cl-item" style="color:var(--ink3);font-family:var(--code);font-size:9px">Max discount: ${minG.toFixed(1)}% · Max premium: +${maxG.toFixed(1)}%</div>
   `;
   document.getElementById('cfRange').textContent = valid.length+' weeks · '+below+' wks undervalued ('+pct(below,valid.length)+'%) · '+above+' wks overvalued ('+pct(above,valid.length)+'%)';
   document.getElementById('cfStats').textContent = 'Current: '+(snap.fair_value_gap_pct>=0?'+':'')+Number(snap.fair_value_gap_pct||0).toFixed(1)+'% · Max discount: '+minG.toFixed(1)+'% · Max premium: +'+maxG.toFixed(1)+'%';
@@ -923,11 +943,24 @@ function drawScoreChart(ctx, all){
     afterDatasetsDraw(ch){
       const {ctx:c,scales,chartArea} = ch;
       if(!scales.y) return;
-      [{v:55,label:'DOWN ≥55',col:'rgba(139,58,36,0.45)'},{v:32,label:'UP ≤32',col:'rgba(45,122,72,0.45)'}].forEach(({v,label,col})=>{
+      [{v:55,label:'▼ DOWN ≥55',col:'rgba(139,58,36,0.7)',fill:'rgba(139,58,36,0.04)',to:100},
+       {v:32,label:'▲ UP ≤32',col:'rgba(45,122,72,0.7)',fill:'rgba(45,122,72,0.04)',to:0}]
+      .forEach(({v,label,col,fill,to})=>{
         const py = scales.y.getPixelForValue(v);
-        c.save();c.beginPath();c.setLineDash([4,3]);c.strokeStyle=col;c.lineWidth=1;
+        const pyTo = scales.y.getPixelForValue(to);
+        // Fill zone
+        c.save();
+        c.fillStyle=fill;
+        c.fillRect(chartArea.left,Math.min(py,pyTo),chartArea.width,Math.abs(py-pyTo));
+        // Line
+        c.beginPath();c.setLineDash([5,3]);c.strokeStyle=col;c.lineWidth=1.5;
         c.moveTo(chartArea.left,py);c.lineTo(chartArea.right,py);c.stroke();
-        c.fillStyle=col;c.font="9px 'Source Code Pro'";c.fillText(label,chartArea.left+4,py-3);
+        // Label badge
+        const tw=c.measureText(label).width;
+        c.fillStyle=col;
+        c.fillRect(chartArea.right-tw-12,py-(v>=55?14:3),tw+8,12);
+        c.fillStyle='#fff';c.font="bold 8px 'Source Code Pro'";
+        c.fillText(label,chartArea.right-tw-8,py-(v>=55?5:11));
         c.restore();
       });
     }
@@ -957,13 +990,126 @@ function drawScoreChart(ctx, all){
   });
 
   document.getElementById('cLegendSimple').innerHTML = `
-    <div class="cl-item"><div class="cl-line" style="background:#2d5c38;height:2px"></div>Health Score (left)</div>
-    <div class="cl-item"><div class="cl-line" style="background:rgba(42,58,92,0.4)"></div>BTC Price (right, faint)</div>
-    <div class="cl-item"><div class="cl-line" style="border-top:2px dashed #8a6020"></div>Live (forward)</div>
-    <div class="cl-item" style="color:var(--sage2);font-family:var(--code);font-size:9px">UP≤32 · DOWN≥55 thresholds shown</div>
+    <div class="cl-item toggle-btn on" id="toggleScore" onclick="toggleScoreLine()" style="cursor:pointer;padding:3px 8px;border:1px solid #2d5c38;border-radius:2px;background:rgba(45,92,56,0.1)">
+      <div class="cl-line" style="background:#2d5c38;height:2px;margin-right:5px"></div>
+      <span style="font-family:var(--code);font-size:9px;color:#2d5c38">Health Score ↕</span>
+    </div>
+    <div class="cl-item toggle-btn on" id="togglePrice" onclick="togglePriceLine()" style="cursor:pointer;padding:3px 8px;border:1px solid rgba(42,58,92,0.5);border-radius:2px;background:rgba(42,58,92,0.06)">
+      <div class="cl-line" style="background:rgba(42,58,92,0.4);margin-right:5px"></div>
+      <span style="font-family:var(--code);font-size:9px;color:rgba(42,58,92,0.7)">BTC Price ↕</span>
+    </div>
+    <div class="cl-item" style="font-family:var(--code);font-size:9px;color:var(--sage2)">UP zone ≤32 · DOWN zone ≥55</div>
+    <div class="cl-item" style="font-family:var(--code);font-size:9px;color:var(--ink3)">Score = composite of 11 signals, 0=max oversold/bullish, 100=max overbought/bearish</div>
   `;
-  document.getElementById('cfRange').textContent = valid.length+' weekly health scores · BTC price (faint) on right axis';
-  document.getElementById('cfStats').textContent = 'Current 7D score: '+snap.composite_7d+' · Signal: '+(snap.signal_7d||'—')+' · BTC: $'+Number(snap.btc_price||0).toLocaleString();
+  window.__scoreChart = chart;
+  document.getElementById('cfRange').textContent = valid.length+' weekly health scores · Click legend items to toggle lines';
+  document.getElementById('cfStats').textContent = 'Score '+(snap.composite_7d||'—')+'/100 · Signal: '+(snap.signal_7d||'—')+' · '+((snap.composite_7d||50)<32?'OVERSOLD — historically bullish':(snap.composite_7d||50)>55?'OVERBOUGHT — historically bearish':'NEUTRAL range');;
+}
+
+function toggleScoreLine(){
+  if(!window.__scoreChart) return;
+  const btn=document.getElementById('toggleScore');
+  const on=btn.classList.toggle('on');
+  [0,1].forEach(i=>{window.__scoreChart.data.datasets[i].hidden=!on;});
+  btn.style.opacity=on?'1':'0.4';
+  window.__scoreChart.update();
+}
+function togglePriceLine(){
+  if(!window.__scoreChart) return;
+  const btn=document.getElementById('togglePrice');
+  const on=btn.classList.toggle('on');
+  [2,3].forEach(i=>{window.__scoreChart.data.datasets[i].hidden=!on;});
+  btn.style.opacity=on?'1':'0.4';
+  window.__scoreChart.update();
+}
+
+// ── Backtest performance ──────────────────────────────────────
+function renderBacktest(){
+  renderBtView(window.__btView||'backtest');
+}
+
+function renderBtView(view){
+  window.__btView = view;
+  const el = document.getElementById('btContent');
+  if(!el) return;
+
+  // Toggle buttons
+  const hdr = `<div style="display:flex;gap:4px;margin-bottom:8px">
+    <button onclick="renderBtView('backtest')" style="padding:3px 10px;font-family:var(--code);font-size:9px;letter-spacing:0.5px;cursor:pointer;border-radius:2px;border:1px solid ${view==='backtest'?'var(--ink)':'var(--rule2)'};background:${view==='backtest'?'var(--ink)':'transparent'};color:${view==='backtest'?'var(--paper)':'var(--ink3)'}">BACKTESTED</button>
+    <button onclick="renderBtView('live')" style="padding:3px 10px;font-family:var(--code);font-size:9px;letter-spacing:0.5px;cursor:pointer;border-radius:2px;border:1px solid ${view==='live'?'var(--ink)':'var(--rule2)'};background:${view==='live'?'var(--ink)':'transparent'};color:${view==='live'?'var(--paper)':'var(--ink3)'}">LIVE</button>
+  </div>`;
+
+  if(view==='backtest'){
+    // 7d stats
+    const ups7  = btOut.filter(o=>o.signal_7d==='UP');
+    const dns7  = btOut.filter(o=>o.signal_7d==='DOWN');
+    const upR7  = ups7.filter(o=>o.correct_7d===true).length;
+    const dnR7  = dns7.filter(o=>o.correct_7d===true).length;
+    // 30d stats
+    const ups30 = btOut.filter(o=>o.signal_30d==='UP');
+    const dns30 = btOut.filter(o=>o.signal_30d==='DOWN');
+    const upR30 = ups30.filter(o=>o.correct_30d===true).length;
+    const dnR30 = dns30.filter(o=>o.correct_30d===true).length;
+
+    const rows = [
+      {nm:'UP signal · 7-day',  desc:`${upR7} correct / ${ups7.length} fired`,  pct:pct(upR7,ups7.length),   col:'var(--sage2)'},
+      {nm:'DOWN signal · 7-day',desc:`${dnR7} correct / ${dns7.length} fired`,  pct:pct(dnR7,dns7.length),   col:'var(--sienna2)'},
+      {nm:'UP signal · 30-day', desc:`${upR30} correct / ${ups30.length} fired`, pct:pct(upR30,ups30.length), col:'var(--sage2)'},
+      {nm:'DOWN signal · 30-day',desc:`${dnR30} correct / ${dns30.length} fired`,pct:pct(dnR30,dns30.length), col:'var(--sienna2)'},
+      {nm:'Naive baseline',     desc:'Buy-and-hold expectation',                  pct:52,                      col:'var(--ink3)'},
+    ];
+    el.innerHTML = hdr + rows.map(r=>`
+      <div class="bt-stat">
+        <div class="bt-left"><div class="bt-nm">${r.nm}</div><div class="bt-desc">${r.desc}</div></div>
+        <div class="bt-right">
+          <div class="bt-bar-bg"><div class="bt-bar-fill" style="width:${r.pct}%;background:${r.col}"></div></div>
+          <div class="bt-pct" style="color:${r.col}">${r.pct}%</div>
+        </div>
+      </div>`).join('');
+  } else {
+    // Live view — use prediction_outcomes
+    if(!predOutcomes || predOutcomes.length===0){
+      el.innerHTML = hdr + '<div style="font-size:11px;color:var(--ink3);font-style:italic;padding:4px 0">No live signals resolved yet. The model runs weekly — check back after signals complete their 7 and 30 day windows.</div>';
+      return;
+    }
+    const resolved7  = predOutcomes.filter(p=>p.correct_7d!==null);
+    const correct7   = resolved7.filter(p=>p.correct_7d===true).length;
+    const resolved30 = predOutcomes.filter(p=>p.correct_30d!==null);
+    const correct30  = resolved30.filter(p=>p.correct_30d===true).length;
+    const pending    = predOutcomes.filter(p=>p.correct_7d===null).length;
+
+    const rows = [
+      {nm:'Live UP/DOWN · 7-day', desc:`${correct7} correct / ${resolved7.length} resolved · ${pending} pending`, pct:pct(correct7,resolved7.length), col:'var(--teal2)'},
+      {nm:'Live UP/DOWN · 30-day',desc:`${correct30} correct / ${resolved30.length} resolved`,                    pct:pct(correct30,resolved30.length),col:'var(--teal2)'},
+    ];
+    el.innerHTML = hdr + rows.map(r=>`
+      <div class="bt-stat">
+        <div class="bt-left"><div class="bt-nm">${r.nm}</div><div class="bt-desc">${r.desc}</div></div>
+        <div class="bt-right">
+          ${r.pct>0?`<div class="bt-bar-bg"><div class="bt-bar-fill" style="width:${r.pct}%;background:${r.col}"></div></div>
+          <div class="bt-pct" style="color:${r.col}">${r.pct}%</div>`:`<div class="bt-pct" style="color:var(--ink3);font-size:10px">—</div>`}
+        </div>
+      </div>`).join('');
+
+    // Signal log
+    el.innerHTML += '<div style="font-family:var(--code);font-size:8px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase;margin:8px 0 4px">Signal Log</div>';
+    el.innerHTML += predOutcomes.slice(0,10).map(p=>{
+      const sig=p.signal_7d||'—';
+      const col=sigCol(sig);
+      const c7=p.correct_7d, p7=p.pct_change_7d;
+      const outcome7 = c7===true?'✓':c7===false?'✗':'⏳';
+      const ocol7 = c7===true?'var(--sage2)':c7===false?'var(--sienna2)':'var(--ink3)';
+      return `<div class="bt-stat" style="font-size:10px">
+        <div class="bt-left">
+          <div class="bt-nm">${p.snapshot_date} <span style="color:${col};font-weight:600">${sig}</span></div>
+          <div class="bt-desc">Entry $${Number(p.price_at_prediction||0).toLocaleString()}</div>
+        </div>
+        <div class="bt-right" style="gap:6px">
+          <div style="font-family:var(--code);font-size:10px;color:${ocol7}">${outcome7} 7d: ${p7!==null?((p7>=0?'+':'')+Number(p7).toFixed(1)+'%'):'pending'}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
 
 // ── Predictions track record ───────────────────────────────────
