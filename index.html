@@ -362,6 +362,7 @@ html,body{height:100%;background:var(--paper);color:var(--ink);font-family:var(-
         <button class="cmode" id="cm1" onclick="swMode('fairvalue',this)">Fair Value</button>
         <button class="cmode" id="cm2" onclick="swMode('gap',this)">FV Gap %</button>
         <button class="cmode" id="cm3" onclick="swMode('score',this)">Score + Price</button>
+        <button class="cmode" id="cm4" onclick="swMode('rolling',this)">Rolling Accuracy</button>
       </div>
       <div class="chart-legend" id="cLegend">
         <div class="cl-item"><div class="cl-line" style="background:var(--slate)"></div>BTC Price</div>
@@ -417,7 +418,7 @@ html,body{height:100%;background:var(--paper);color:var(--ink);font-family:var(-
 <script>
 const SB='https://amrxduglanxsrdkvkbvd.supabase.co';
 const SK='sb_publishable_mJFOcJkgRpfgsPrK9PTwDA_E5pdGDoL';
-let snap=null, btSnaps=[], btOut=[], liveSnaps=[], predOutcomes=[], chart=null, mode='signals';
+let snap=null, btSnaps=[], btOut=[], liveSnaps=[], predOutcomes=[], fvBacktestStats=[], rollingAccuracy=[], chart=null, mode='signals';
 const TODAY=new Date().toISOString().split('T')[0];
 
 // ── Fetch helpers ──────────────────────────────────────────────
@@ -445,12 +446,14 @@ async function load(){
 
   try {
     // Fetch in parallel — use correct columns for each table
-    const [snaps, bts, bto, ls, po] = await Promise.all([
+    const [snaps, bts, bto, ls, po, fvStats, rollingAcc] = await Promise.all([
       sbGet('snapshots', 'order=created_at.desc&limit=1'),
       sbGet('backtest_snapshots', 'order=snapshot_date.asc&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d'),
       sbGet('backtest_outcomes', 'order=snapshot_date.asc&select=snapshot_date,btc_price_entry,signal_7d,signal_30d,correct_7d,correct_30d,composite_7d'),
       sbGet('snapshots', 'order=snapshot_date.asc&limit=52&select=snapshot_date,btc_price,composite_7d,composite_30d,signal_7d,signal_30d,fair_value,fair_value_gap_pct,realised_price,dma_200'),
       sbGet('prediction_outcomes', 'order=snapshot_date.desc&limit=20&select=snapshot_date,price_at_prediction,price_7d,price_30d,pct_change_7d,pct_change_30d,signal_7d,signal_30d,correct_7d,correct_30d'),
+      sbGet('fv_backtest_stats', 'order=gap_low.asc'),
+      sbGet('rolling_model_accuracy', 'order=snapshot_date.asc&select=snapshot_date,up_hit_rate_20w,dn_hit_rate_20w,n_signals_20w'),
     ]);
 
     if(!snaps || !snaps.length) throw new Error('No snapshot data found');
@@ -460,6 +463,8 @@ async function load(){
     btOut = bto || [];
     liveSnaps = ls || [];
     predOutcomes = po || [];
+    fvBacktestStats = fvStats || [];
+    rollingAccuracy = rollingAcc || [];
 
     setSub('Rendering…');
     render();
@@ -547,11 +552,21 @@ function render(){
   document.getElementById('scH').style.color = sCol(s.composite_7d);
   document.getElementById('scHr').textContent = s.regime_7d || '—';
 
-  // Historical
-  const med = s.fv_median_30d;
+  // Historical context — use real fv_backtest_stats if available
+  const curGap = s.fair_value_gap_pct;
+  let histMedian = s.fv_median_30d, histHR = s.fv_hit_rate, histLabel = s.fv_historical_label;
+  if(fvBacktestStats.length && curGap !== null && curGap !== undefined){
+    const bucket = fvBacktestStats.find(b => curGap >= b.gap_low && curGap < b.gap_high);
+    if(bucket){
+      histMedian = bucket.median_30d;
+      histHR     = bucket.positive_30d;
+      histLabel  = bucket.bucket_label + ' (n='+bucket.n_weeks+' wks)';
+    }
+  }
+  const med = histMedian;
   document.getElementById('scHist').textContent = fPct(med);
   document.getElementById('scHist').style.color = med >= 0 ? 'var(--sage2)' : 'var(--sienna2)';
-  document.getElementById('scHistSub').textContent = (s.fv_hit_rate||'—') + '% hit rate at this gap';
+  document.getElementById('scHistSub').textContent = (histHR||'—') + '% positive 30d · ' + (histLabel||'—');
 
   // Magnitude
   const magMap = {EXPLOSIVE:{c:'var(--sienna2)',e:'🔥',d:'Extreme OI + funding'},ELEVATED:{c:'var(--amber2)',e:'⚡',d:'Elevated derivatives'},NORMAL:{c:'var(--slate2)',e:'〰',d:'Typical conditions'},COMPRESSION:{c:'var(--teal2)',e:'🧊',d:'OI contracting'},UNKNOWN:{c:'var(--ink3)',e:'—',d:'Insufficient data'}};
@@ -616,6 +631,29 @@ function renderAnalysis(){
     else head=`BTC is ${gs} fair value. No clear edge — signals are mixed.`;
   }
 
+  // Build FV backtest context
+  let fvTableHTML = '';
+  if(fvBacktestStats.length && gap !== null){
+    const cur = fvBacktestStats.find(b=>gap>=b.gap_low&&gap<b.gap_high);
+    fvTableHTML = `<div style="margin-top:8px;padding:8px;background:var(--paper3);border-radius:2px;border:1px solid var(--rule)">
+      <div style="font-family:var(--code);font-size:8px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase;margin-bottom:6px">FV Gap Backtest · ${fvBacktestStats.reduce((s,b)=>s+b.n_weeks,0)} weeks analysed</div>
+      <table style="width:100%;border-collapse:collapse;font-family:var(--code);font-size:10px">
+        <tr style="color:var(--ink3)"><td>Zone</td><td style="text-align:right">n</td><td style="text-align:right">7d</td><td style="text-align:right">30d</td><td style="text-align:right">% positive</td></tr>
+        ${fvBacktestStats.map(b=>{
+          const isCur = cur && b.bucket_label===cur.bucket_label;
+          const col = b.median_30d>=0?'var(--sage2)':'var(--sienna2)';
+          return `<tr style="${isCur?'font-weight:600;background:rgba(0,0,0,0.04)':''}border-top:1px solid var(--rule)">
+            <td style="padding:2px 0;${isCur?'color:var(--teal2)':''}">${isCur?'► ':''} ${b.bucket_label}</td>
+            <td style="text-align:right;color:var(--ink3)">${b.n_weeks}</td>
+            <td style="text-align:right;color:${col}">${b.median_7d>=0?'+':''}${b.median_7d}%</td>
+            <td style="text-align:right;color:${col}">${b.median_30d>=0?'+':''}${b.median_30d}%</td>
+            <td style="text-align:right;color:var(--ink3)">${b.positive_30d}%</td>
+          </tr>`;
+        }).join('')}
+      </table>
+    </div>`;
+  }
+
   document.getElementById('analysisContent').innerHTML =
     `<div class="analysis-head">${head}</div>` +
     (drivers.length ? drivers.map(d=>{
@@ -625,7 +663,7 @@ function renderAnalysis(){
         <div class="drv-ico">${d.bull?'↑':'↓'}</div>
         <div><span class="drv-nm" style="color:${bc}">${d.n}.</span><span class="drv-tx">${d.t}</span></div>
       </div>`;
-    }).join('') : `<div class="drv" style="border-left-color:var(--rule2)"><div class="drv-tx" style="color:var(--ink3)">Most indicators neutral. No strong directional conviction in current conditions.</div></div>`);
+    }).join('') : `<div class="drv" style="border-left-color:var(--rule2)"><div class="drv-tx" style="color:var(--ink3)">Most indicators neutral. No strong directional conviction in current conditions.</div></div>`) + fvTableHTML;
 }
 
 // ── Signal chips ───────────────────────────────────────────────
@@ -732,6 +770,7 @@ function drawChart(){
   else if(mode==='fairvalue') drawFairValueChart(ctx, all);
   else if(mode==='gap')  drawGapChart(ctx, all);
   else if(mode==='score') drawScoreChart(ctx, all);
+  else if(mode==='rolling') drawRollingChart(ctx, all);
 }
 
 // ── CHART 1: Price + Signals ───────────────────────────────────
@@ -1144,6 +1183,59 @@ function renderPredictions(){
     ? `<div style="font-family:var(--code);font-size:9px;color:var(--ink3);margin-bottom:6px;letter-spacing:1px">${correct}/${resolved.length} RESOLVED CORRECT (${pct(correct,resolved.length)}%)</div>`
     : `<div style="font-family:var(--code);font-size:9px;color:var(--ink3);margin-bottom:6px;letter-spacing:1px">${predOutcomes.length} SIGNALS PENDING RESOLUTION</div>`;
   el.innerHTML = header + rows;
+}
+
+// ── CHART 5: Rolling model accuracy ───────────────────────────
+function drawRollingChart(ctx, all){
+  if(!rollingAccuracy.length){
+    document.getElementById('cfRange').textContent='Rolling accuracy data not yet available — run Cell 14 in Colab';
+    return;
+  }
+  const valid = rollingAccuracy.filter(r=>r.up_hit_rate_20w!==null||r.dn_hit_rate_20w!==null);
+  const todayIdx = valid.findIndex(r=>r.snapshot_date>=TODAY);
+  const labels  = valid.map((_,i)=>i);
+  const upRates = valid.map(r=>r.up_hit_rate_20w);
+  const dnRates = valid.map(r=>r.dn_hit_rate_20w);
+  // 52% baseline
+  const baseline = valid.map(()=>52);
+
+  // Split at today for live vs backtest colouring
+  const histUp = valid.map((r,i)=>todayIdx===-1||i<todayIdx?r.up_hit_rate_20w:null);
+  const histDn = valid.map((r,i)=>todayIdx===-1||i<todayIdx?r.dn_hit_rate_20w:null);
+  const liveUp = valid.map((r,i)=>todayIdx!==-1&&i>=todayIdx?r.up_hit_rate_20w:null);
+  const liveDn = valid.map((r,i)=>todayIdx!==-1&&i>=todayIdx?r.dn_hit_rate_20w:null);
+
+  chart = new Chart(ctx,{
+    type:'line',
+    data:{labels, datasets:[
+      {data:histUp,borderColor:'#2d7a48',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false,label:'UP 7d (hist)'},
+      {data:histDn,borderColor:'#8a3a24',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false,label:'DOWN 7d (hist)'},
+      {data:liveUp,borderColor:'#2d7a48',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.4,fill:false},
+      {data:liveDn,borderColor:'#8a3a24',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.4,fill:false},
+      {data:baseline,borderColor:'rgba(0,0,0,0.15)',borderWidth:1,borderDash:[2,4],pointRadius:0,fill:false,label:'Baseline 52%'},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e1c16',borderWidth:0,padding:8,
+        titleFont:{family:"'Source Code Pro'",size:9},bodyFont:{family:"'Source Code Pro'",size:10},
+        callbacks:{title:items=>valid[items[0].dataIndex]?.snapshot_date||'',
+          label:x=>{const v=x.raw;if(v===null||v===undefined)return null;
+            const lb=['UP hit rate','DOWN hit rate','UP (live)','DOWN (live)','Baseline'];
+            return ' '+(lb[x.datasetIndex]||'')+': '+Number(v).toFixed(1)+'%';}}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:mkXTicks(valid)},
+        y:{grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},min:0,max:100,
+          ticks:{color:'#b8b4ac',font:{family:"'Source Code Pro'",size:9},callback:v=>v+'%'}}}}
+  });
+
+  document.getElementById('cLegendSimple').innerHTML = `
+    <div class="cl-item"><div class="cl-line" style="background:#2d7a48;height:2px"></div>UP signal hit rate</div>
+    <div class="cl-item"><div class="cl-line" style="background:#8a3a24;height:2px"></div>DOWN signal hit rate</div>
+    <div class="cl-item"><div class="cl-line" style="border-top:1px dashed rgba(0,0,0,0.2)"></div>52% baseline</div>
+    <div class="cl-item" style="font-family:var(--code);font-size:9px;color:var(--ink3)">Rolling 20-week window</div>
+  `;
+  const avgUp = upRates.filter(v=>v!==null).reduce((s,v)=>s+v,0)/upRates.filter(v=>v!==null).length;
+  const avgDn = dnRates.filter(v=>v!==null).reduce((s,v)=>s+v,0)/dnRates.filter(v=>v!==null).length;
+  document.getElementById('cfRange').textContent = valid.length+' weekly windows · 20-week rolling hit rate';
+  document.getElementById('cfStats').textContent = 'Avg UP accuracy: '+avgUp.toFixed(1)+'% · Avg DOWN accuracy: '+avgDn.toFixed(1)+'% · Baseline: 52%';
 }
 
 const tipEl = document.getElementById('tip');
